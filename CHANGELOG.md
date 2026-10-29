@@ -64,7 +64,19 @@ The first public release: desktop apps for macOS (Apple Silicon) and Windows, an
 - **MCP connectors** (`mcp_servers.json` with `${VAR}` expansion) with per-server tool policy:
   read-only tools pre-approved, side-effecting tools gated by a **spoken "yes"** (silence or an
   unclear answer means no), destructive tools blocked by default, everything else denied.
-  Connector health checks and per-connector notes.
+  Connector health checks and per-connector notes. GitHub in two minutes: paste GitHub's hosted
+  server and a token into the Connectors window (README); reading runs freely and creating an
+  issue asks first. The Connectors window:
+  - says when a server refuses the token (HTTP 401/403) instead of a bare "Server returned an
+    error response";
+  - refuses VS Code's `${input:...}` prompts rather than saving one as the token, and turns
+    `${env:NAME}` into `${NAME}`;
+  - lets a pasted server take the name of a switched-off one in `config.yaml` (such as the
+    shipped `github` example);
+  - deletes a removed server's token from `.env` when nothing else uses it.
+
+  The bundled local `github` server no longer starts with `--read-only`, so its issue tools work
+  after a spoken yes, as `config.yaml` lists them.
 - **Local tools:** timers, the time, and a "start a new project" flow (folder, git repo, private
   GitHub repo and tracking issue) behind the confirmation gate.
 - **Awareness and conversations:** an awake window after each reply, local voice commands

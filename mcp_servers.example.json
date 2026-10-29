@@ -8,10 +8,10 @@
     "On Windows an npx (or other .cmd shim) command is run as 'cmd /c npx ...' automatically."
   ],
   "github": {
-    "_comment": "Local github-mcp-server exe (github/github-mcp-server releases). --read-only strips every write tool at the server; remove it in Phase 3 if start_project should create repos through MCP instead of gh.",
+    "_comment": "Local github-mcp-server exe (github/github-mcp-server releases). Write tools are offered, but config.yaml lets them run only after a spoken yes (side_effecting) or never (destructive); any other tool is denied. Add --read-only to the args to strip them at the server.",
     "type": "stdio",
     "command": "${SPARK_GITHUB_MCP_BIN}",
-    "args": ["stdio", "--read-only", "--toolsets", "context,repos,issues,pull_requests"],
+    "args": ["stdio", "--toolsets", "context,repos,issues,pull_requests"],
     "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${SPARK_GITHUB_PAT}" }
   },
   "github_remote": {

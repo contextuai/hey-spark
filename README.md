@@ -196,6 +196,37 @@ server's tool policy lives in `config.yaml` under `connectors:`:
 - `destructive` tools are blocked unless you set `allow_destructive: true` for that server.
 - Any tool on none of these lists is denied.
 
+### GitHub in two minutes
+
+1. Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new) for the
+   repos Spark may see: *Issues: Read and write*, *Pull requests: Read* and *Contents: Read*.
+2. In the **Connectors** window choose **Add connectors**, paste this with your token in place of
+   `YOUR_TOKEN`, and press **Add and test**. Spark moves the token to `.env`.
+
+   ```json
+   {
+     "mcpServers": {
+       "github": {
+         "type": "http",
+         "url": "https://api.githubcopilot.com/mcp/",
+         "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+       }
+     }
+   }
+   ```
+
+3. Switch it on. Spark uses GitHub's own labels for the tools: reading runs freely, creating an
+   issue asks you first, and deleting is off. Try *"What are the open issues in my-repo?"*
+
+This is GitHub's official [github-mcp-server](https://github.com/github/github-mcp-server),
+hosted by GitHub. GitHub's docs list Copilot access as a prerequisite for the hosted server
+(Copilot has a free plan); if your account is refused, or you'd rather run it on your own
+computer, see
+[docs/connectors.md](docs/connectors.md). Paste the token itself: GitHub's VS Code example uses
+`${input:...}`, a VS Code prompt that Spark can't show.
+
+### Other connectors
+
 The bundled GitHub and Composio servers ship disabled. Add their credentials to `.env`, then set
 `enabled: true` for them in `config.yaml`. [docs/connectors.md](docs/connectors.md) covers
 GitHub, Gmail and Google Calendar (through Composio), and Outlook, with step-by-step credential

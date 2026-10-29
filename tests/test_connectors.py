@@ -157,6 +157,94 @@ def test_reserved_names_are_refused(tmp_path):
     assert "config.yaml" in r.skipped["WIKI"]
 
 
+def test_vscode_input_prompt_is_refused_not_stored_as_the_token(tmp_path):
+    # GitHub's README shows this VS Code form; it used to be saved to .env as the "token"
+    s = _settings(tmp_path)
+    pasted = {
+        "servers": {
+            "github": {
+                "type": "http",
+                "url": "https://api.githubcopilot.com/mcp/",
+                "headers": {"Authorization": "Bearer ${input:github_mcp_pat}"},
+            }
+        },
+        "inputs": [{"type": "promptString", "id": "github_mcp_pat", "password": True}],
+    }
+    with pytest.raises(ConnectorError, match=r"\$\{input:github_mcp_pat\}.*real value"):
+        cs.add_servers(s, json.dumps(pasted))
+    assert not (tmp_path / ".env").exists()
+    assert cs.load_store(tmp_path / "connectors.json") == {}
+
+
+def test_vscode_env_variable_becomes_spark_placeholder():
+    sink = _sink()
+    [p] = cs.parse_pasted(
+        '{"gh": {"command": "gh-mcp", "env": {"GITHUB_TOKEN": "${env:MY_PAT}"},'
+        ' "args": ["--x", "${env:MODE}"]}}',
+        sink,
+    )
+    assert p.config["env"] == {"GITHUB_TOKEN": "${MY_PAT}"}
+    assert p.config["args"] == ["--x", "${MODE}"]
+    assert sink.new == {}
+    assert any("${env:NAME}" in n for n in p.notes)
+
+
+def test_a_switched_off_config_server_gives_its_name_to_a_window_server(tmp_path, monkeypatch):
+    # the shipped config.yaml has `github` with enabled: false; pasting GitHub's own example
+    # under that name must work, and the window server replaces it
+    monkeypatch.setenv("GH_TOKEN_T", TOKEN)
+    s = _settings(
+        tmp_path,
+        {"github": {"type": "stdio", "command": "${SPARK_GITHUB_MCP_BIN}"}},
+        {"github": {"enabled": False, "allowed_tools": ["get_me"]}},
+    )
+    api = ConnectorsApi(s, probe_fn=_fake_probe)
+    added = api.add(
+        '{"github": {"url": "https://api.githubcopilot.com/mcp/",'
+        ' "headers": {"Authorization": "Bearer ${GH_TOKEN_T}"}}}'
+    )
+    assert added["added"] == ["github"], added
+    [row] = [r for r in api.list()["servers"] if r["name"] == "github"]
+    assert row["source"] == "app"
+    api.test("github")
+    api.set_enabled("github", True)
+    setup = load_mcp_servers(s)
+    assert setup.servers["github"]["url"] == "https://api.githubcopilot.com/mcp/"
+    assert not any("skipped" in w for w in setup.warnings)
+
+
+def test_removing_a_server_clears_its_unused_secrets_from_env(tmp_path, monkeypatch):
+    monkeypatch.delenv("SPARK_MCP_CATALOG_DOCS_TOKEN", raising=False)
+    monkeypatch.delenv("SPARK_MCP_SOLO_TOKEN", raising=False)
+    s = _settings(tmp_path)
+    cs.add_servers(s, json.dumps(DESKTOP))  # two servers sharing one token
+    cs.add_servers(s, '{"SOLO": {"url": "https://s.test/mcp", "headers": {"X-Key": "solo-123"}}}')
+    env = tmp_path / ".env"
+    (tmp_path / ".env").write_text(
+        env.read_text(encoding="utf-8") + "ANTHROPIC_API_KEY=keep-me\n", encoding="utf-8"
+    )
+
+    assert cs.remove(s, "WIKI") == []  # CATALOG_DOCS still uses the shared token
+    assert "SPARK_MCP_CATALOG_DOCS_TOKEN=" in env.read_text(encoding="utf-8")
+    assert cs.remove(s, "CATALOG_DOCS") == ["SPARK_MCP_CATALOG_DOCS_TOKEN"]
+    assert cs.remove(s, "SOLO") == ["SPARK_MCP_SOLO_X_KEY"]
+    text = env.read_text(encoding="utf-8")
+    assert TOKEN not in text and "solo-123" not in text
+    assert "ANTHROPIC_API_KEY=keep-me" in text
+
+
+def test_removing_keeps_a_secret_mcp_servers_json_still_uses(tmp_path, monkeypatch):
+    monkeypatch.delenv("SPARK_MCP_CATALOG_DOCS_TOKEN", raising=False)
+    s = _settings(
+        tmp_path,
+        {"other": {"type": "http", "url": "${SPARK_MCP_CATALOG_DOCS_TOKEN}"}},
+    )
+    cs.add_servers(s, json.dumps(DESKTOP))
+    cs.remove(s, "WIKI")
+    assert cs.remove(s, "CATALOG_DOCS") == []
+    assert TOKEN in (tmp_path / ".env").read_text(encoding="utf-8")
+
+
 def test_merge_tools_keeps_choices_and_defaults_by_hint():
     previous = [{"name": "a", "mode": "off"}, {"name": "gone", "mode": "allow"}]
     found = [
@@ -191,7 +279,7 @@ def test_enabled_app_server_reaches_the_brain_policy(tmp_path, monkeypatch):
     assert TOKEN not in json.dumps(setup.servers)
 
 
-def test_config_yaml_server_wins_over_app_server(tmp_path, monkeypatch):
+def test_switched_on_config_yaml_server_wins_over_app_server(tmp_path, monkeypatch):
     monkeypatch.setenv("SPARK_MCP_CATALOG_DOCS_TOKEN", TOKEN)
     s = _settings(
         tmp_path,
@@ -236,6 +324,33 @@ async def test_probe_unreachable_http_fails_fast(tmp_path):
         {"type": "http", "url": "http://127.0.0.1:9/mcp"}, base_dir=tmp_path, timeout_s=10
     )
     assert not r.ok and r.error
+
+
+async def test_probe_reports_the_http_status_the_mcp_client_hides(tmp_path, monkeypatch):
+    # mcp 2.x turns a 401 into a bare "Server returned an error response"
+    from spark.brain import mcp_probe
+
+    class MCPError(Exception):
+        pass
+
+    def failing_client(*a, **k):
+        raise MCPError("Server returned an error response")
+
+    seen = {}
+
+    async def status(config, environ):
+        seen["auth"] = config["headers"]["Authorization"]
+        return 401
+
+    monkeypatch.setattr(mcp_probe, "_make_client", failing_client)
+    monkeypatch.setattr(mcp_probe, "_http_status", status)
+    r = await probe_async(
+        {"type": "http", "url": "https://g.test/mcp", "headers": {"Authorization": "Bearer x"}},
+        base_dir=tmp_path,
+        environ={},
+    )
+    assert not r.ok and "refused" in r.error and "401" in r.error
+    assert seen["auth"] == "Bearer x"
 
 
 def test_tool_summary_reads_annotations():

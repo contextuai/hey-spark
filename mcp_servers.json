@@ -2,7 +2,7 @@
   "github": {
     "type": "stdio",
     "command": "${SPARK_GITHUB_MCP_BIN}",
-    "args": ["stdio", "--read-only", "--toolsets", "context,repos,issues,pull_requests"],
+    "args": ["stdio", "--toolsets", "context,repos,issues,pull_requests"],
     "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${SPARK_GITHUB_PAT}" }
   },
   "github_remote": {
