@@ -1,0 +1,41 @@
+{
+  "_comment": [
+    "Annotated copy of mcp_servers.json. Keys that start with '_' are ignored by spark/brain/mcp_config.py.",
+    "Every server also needs an entry under connectors.servers in config.yaml (enabled flag and tool lists); servers without one are not loaded.",
+    "Values are ${VAR} placeholders only. Put the real values in .env. The claude CLI expands them itself, so secrets never appear on its command line.",
+    "A server whose ${VAR} is missing or empty is disabled with a warning. Write ${VAR:-default} to make a variable optional.",
+    "stdio: type, command, args, env. http/sse: type, url, headers. A relative command path resolves against the config folder.",
+    "On Windows an npx (or other .cmd shim) command is run as 'cmd /c npx ...' automatically."
+  ],
+  "github": {
+    "_comment": "Local github-mcp-server exe (github/github-mcp-server releases). --read-only strips every write tool at the server; remove it in Phase 3 if start_project should create repos through MCP instead of gh.",
+    "type": "stdio",
+    "command": "${SPARK_GITHUB_MCP_BIN}",
+    "args": ["stdio", "--read-only", "--toolsets", "context,repos,issues,pull_requests"],
+    "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${SPARK_GITHUB_PAT}" }
+  },
+  "github_remote": {
+    "_comment": "Fallback when the exe is blocked: GitHub's hosted server, read-only path. May need a Copilot licence (docs/connectors.md §6).",
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/readonly",
+    "headers": { "Authorization": "Bearer ${SPARK_GITHUB_PAT}" }
+  },
+  "composio": {
+    "_comment": "Composio dedicated MCP server (Gmail + Google Calendar). URL looks like https://backend.composio.dev/v3/mcp/<server-id>?user_id=<user>. Do not use session / Tool Router URLs: their meta tools defeat the allowlist.",
+    "type": "http",
+    "url": "${COMPOSIO_MCP_URL}",
+    "headers": { "x-api-key": "${COMPOSIO_API_KEY}" }
+  },
+  "composio_outlook": {
+    "_comment": "Separate Composio server for Outlook so it can be switched off on its own. Disabled by default in config.yaml (spec §12).",
+    "type": "http",
+    "url": "${COMPOSIO_MCP_URL_OUTLOOK}",
+    "headers": { "x-api-key": "${COMPOSIO_API_KEY}" }
+  },
+  "_filesystem_npx_example": {
+    "_comment": "Shape of an npx-based stdio server. Rename the key (no leading '_') and add a connectors.servers entry to use it.",
+    "type": "stdio",
+    "command": "npx",
+    "args": ["-y", "@modelcontextprotocol/server-filesystem", "${SPARK_FILES_ROOT}"]
+  }
+}

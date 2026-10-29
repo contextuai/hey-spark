@@ -1,0 +1,386 @@
+# Spark configuration. Every key here has the same default in spark/config.py.
+# Override any key from the environment with SPARK_<SECTION>__<KEY>, e.g. SPARK_STT__BACKEND=deepgram.
+# Relative paths are resolved against this file's folder. Secrets never go here: backends read
+# them from the environment variable named in their *_env option (put them in .env).
+
+# Where downloaded models live (whisper, piper voices, kokoro). Gitignored. Keep it small.
+models_dir: ./.models
+
+audio:
+  sample_rate: 16000          # internal rate; everything is 16 kHz mono int16
+  input_backend: sounddevice  # registry key for the mic (audio_in)
+  output_backend: sounddevice # registry key for the speaker (audio_out)
+  input_device: null          # null = system default; or a device index / name substring
+  output_device: null
+  host_api: Windows WASAPI    # preferred PortAudio host API; falls back to the default if absent
+  block_size: 512             # mic callback block size in samples
+  ring_seconds: 10.0          # ring buffer length (pre-roll + re-chunking)
+  earcon_volume: 0.5          # 0..1 gain for wake/thinking/error cues
+
+wakeword:
+  backend: openwakeword       # porcupine | openwakeword (custom "Hey Spark" model)
+  options:
+    porcupine:
+      access_key_env: PICOVOICE_ACCESS_KEY            # env var holding the Picovoice AccessKey
+      keyword_path: assets/wakewords/hey_spark_windows.ppn
+      sensitivity: 0.5        # 0..1, higher = more wakes (and more false wakes)
+    openwakeword:
+      model_path: assets/wakewords/hey_spark.onnx  # custom "Hey Spark" model (single self-contained file); null = bundled model_name
+      model_name: hey_jarvis  # bundled fallback used only when model_path is null
+      threshold: 0.6          # score threshold 0..1. 0.6 because "hey park"/"hey sport" can reach ~0.8;
+                              # "hey spark" scored 0.79-0.86 on synthetic voices. Lower if it misses you
+
+vad:
+  backend: silero             # Silero VAD via the ONNX model bundled with faster-whisper (no torch)
+  options:
+    silero:
+      threshold: 0.5          # speech probability threshold
+
+recorder:
+  end_silence_ms: 700         # silence after speech that ends the utterance (spec §9)
+  pre_roll_ms: 300            # audio kept from before the wake word fired / speech started
+  min_speech_ms: 150          # shorter blips are not treated as speech
+  max_utterance_s: 15.0       # hard cap on one utterance
+  no_speech_timeout_s: 30.0   # after the wake word, time to think before you ask (then back to sleep)
+
+stt:
+  backend: faster_whisper     # faster_whisper | deepgram
+  options:
+    faster_whisper:
+      model: base.en          # upgrade to small.en only if accuracy is poor and latency allows
+      device: cpu
+      compute_type: int8
+      cpu_threads: 4
+      beam_size: 1            # greedy decoding for latency
+      language: en
+    deepgram:
+      api_key_env: DEEPGRAM_API_KEY
+      model: nova-3
+      language: en
+      timeout_s: 10.0
+
+tts:
+  backend: kokoro             # kokoro | piper | elevenlabs (Kokoro downloads ~340 MB on first run)
+  options:
+    piper:
+      voice: en_US-ljspeech-medium # file <models_dir>/piper/<voice>.onnx (+ .onnx.json)
+      length_scale: 1.0            # >1 slower, <1 faster speech
+      speaker_id: null
+    kokoro:
+      model_file: kokoro-v1.0.onnx # in <models_dir>/kokoro/
+      voices_file: voices-v1.0.bin
+      voice: bm_george             # British male; pick another in the Personality & Voice window
+      speed: 1.0
+      lang: null                   # null = from the voice (af_/am_ en-us, bf_/bm_ en-gb)
+    elevenlabs:
+      api_key_env: ELEVENLABS_API_KEY
+      voice_id: 21m00Tcm4TlvDq8ikWAM
+      model: eleven_flash_v2_5
+
+brain:
+  backend: claude_agent       # claude_agent | openai_compat | mock (openai_compat: see the
+                              # openai_compat section below and docs/openai_brain.md)
+  # auto (default): quick requests on fast_model, bigger ones on deep_model. deep: every request
+  # on deep_model, the voice you talk to, which hands multi-step lookups to the researcher worker
+  # on worker_model (best answers, highest cost). fast: every request on fast_model.
+  # Change it in the window (Auto | Fast | Deep) or by voice ("use the deep model",
+  # "back to auto"); that choice is saved in prefs.json and wins over this line.
+  mode: auto
+  fast_model: claude-haiku-5-5
+  deep_model: claude-opus-5-5     # the voice: reasons, orchestrates, speaks (Sonnet 5.5 is faster)
+  workers: true               # a researcher sub-agent does tool-heavy lookups in the background
+  worker_model: null          # null = fast_model (Haiku 5.5)
+  worker_max_turns: 25
+  idle_reset_s: 600           # start a fresh conversation after 10 min idle
+  max_turns: 8                # agent steps (tool rounds) per fast request. Over budget, Spark answers
+                              # with what it found instead of failing
+  deep_max_turns: 25          # the same for deep requests (data lookups need schema discovery + queries)
+  connect_timeout_s: 60       # CLI spawn + connect at warm-up
+  prime_on_connect: true      # send a tiny throwaway turn after connecting: the first turn of a
+                              # session is ~4 s slower, so pay that at warm-up, not on the user
+  cli_path: null              # path to the `claude` CLI; null = the installed Claude Code (PATH, ~/.local/bin)
+  new_topic_phrases: ["new topic", "start over", "forget that", "reset conversation"]
+  # The OpenAI-compatible brain (backend: openai_compat, P5.7e). Same voice prompt, confirmations,
+  # step budget, connectors and briefing as Claude; MCP servers are run by Spark itself. Not
+  # available here: claude.ai account connectors (they come from the Claude CLI login), and the
+  # researcher is a nested tool loop instead of an Agent SDK sub-agent. docs/openai_brain.md.
+  openai_compat:
+    provider: openai          # openai | azure | openrouter | groq | together | ollama | lmstudio | hermes | vllm | custom
+    base_url: null            # null = the preset's (Azure: https://<resource>.openai.azure.com/openai/v1)
+    api_key_env: null         # NAME of the env var holding the key; null = the preset's
+                              # (OPENAI_API_KEY, OPENROUTER_API_KEY, ...). Put the key in .env.
+    api_version: null         # Azure classic endpoints only (sent as ?api-version=)
+    extra_headers: {}         # sent with every request; values may use ${VAR} from .env
+    extra_body: {}            # extra request fields, e.g. {reasoning_effort: minimal}
+    fast_model: null          # null = the preset's suggestion (OpenAI: gpt-4.1-mini, Ollama: qwen2.5:7b)
+    deep_model: null          # null = the preset's suggestion (OpenAI: gpt-4.1, Ollama: qwen2.5:14b)
+    worker_model: null        # the researcher; null = fast_model
+    timeout_s: 60             # per request: connecting, and the gap between streamed chunks
+    max_tokens: 1024          # per reply; null = the provider's default
+    temperature: null         # null = the provider's default
+    parallel_tool_calls: null # null = don't send it (not every server understands it)
+    max_tool_result_chars: 16000  # longer tool results are cut before the model sees them
+                              # (the activity log keeps the whole result)
+
+# Connectors (MCP servers, spec §7). Server definitions live in mcp_config (placeholders only;
+# secrets come from .env via ${VAR}). Each entry under servers: is keyed by the server name used
+# in mcp_config and in tool names (mcp__<server>__<tool>). Lists take bare tool names or full
+# mcp__<server>__<tool> names; * and ? globs are allowed (see docs/connectors.md "Implemented in P2.2").
+# route: deep (default auto) sends a request that names the server (or any of route_keywords) to
+# the deep model, and keeps the rest of that conversation deep once one of its tools ran. Servers
+# added in the Connectors window default to route: deep (they are mostly business data systems).
+connectors:
+  mcp_config: mcp_servers.json    # relative to this file
+  ui_file: connectors.json        # servers added in the desktop Connectors window (managed by
+                                  # the app; secrets go to .env). Names here must not clash.
+  # claude.ai account connectors (Gmail, Google Calendar, ...) are the ones you connected on
+  # claude.ai (Settings -> Connectors) or with /mcp in Claude Code. The logged-in CLI brings them
+  # in itself, so they need no mcp_servers.json entry: configure them below as servers whose name
+  # starts with claude_ai_ (the display name "claude.ai Google Calendar" -> claude_ai_Google_Calendar).
+  # They load only when at least one claude_ai_* server is enabled; every other claude.ai
+  # connector stays hidden from Spark. true forces them all off (ENABLE_CLAUDEAI_MCP_SERVERS=false).
+  block_claudeai_connectors: false
+  claudeai_state_file: claudeai_connectors.json # last seen claude.ai connectors (app-managed)
+  servers:
+    github:                       # local github-mcp-server exe; needs SPARK_GITHUB_MCP_BIN and SPARK_GITHUB_PAT
+      enabled: false              # turn on after setting the variables in .env (docs/connectors.md §5)
+      allowed_tools:              # read-only, pre-approved (globs expand only against known tool names;
+        - get_me                  # a server-wide wildcard is never accepted here)
+        - list_pull_requests
+        - pull_request_read
+        - search_pull_requests
+        - list_issues
+        - issue_read
+        - search_issues
+        - get_file_contents
+        - list_commits
+        - get_commit
+        - list_branches
+      side_effecting:             # allowed only after a spoken "yes" (confirmation hook)
+        - create_repository
+        - issue_write
+        - add_issue_comment
+        - create_pull_request
+      destructive:                # passed as disallowed_tools unless allow_destructive: true
+        - merge_pull_request
+        - delete_repository
+        - delete_file
+        - push_files
+        - create_or_update_file
+        - fork_repository
+        - actions_run_trigger
+        - update_pull_request_branch
+      allow_destructive: false
+    github_remote:                # fallback: api.githubcopilot.com (may need a Copilot licence)
+      enabled: false
+      allowed_tools: [get_me, list_pull_requests, pull_request_read, search_pull_requests, list_issues, issue_read, search_issues]
+      side_effecting: []
+      destructive: []
+      allow_destructive: false
+    composio:                     # Gmail + Google Calendar; needs COMPOSIO_API_KEY and COMPOSIO_MCP_URL
+      enabled: false              # turn on after setting the variables in .env (docs/connectors.md §5)
+      allowed_tools:
+        - GMAIL_FETCH_EMAILS
+        - GMAIL_FETCH_MESSAGE_BY_THREAD_ID
+        - GMAIL_LIST_THREADS
+        - GMAIL_GET_PROFILE
+        - GOOGLECALENDAR_EVENTS_LIST
+        - GOOGLECALENDAR_EVENTS_LIST_ALL_CALENDARS
+        - GOOGLECALENDAR_FIND_EVENT
+        - GOOGLECALENDAR_FIND_FREE_SLOTS
+      side_effecting:
+        - GMAIL_CREATE_EMAIL_DRAFT
+        - GOOGLECALENDAR_CREATE_EVENT
+      destructive:
+        - GMAIL_SEND_EMAIL
+        - GMAIL_SEND_DRAFT
+        - GMAIL_REPLY_TO_THREAD
+        - GMAIL_DELETE_*          # glob: sent as a wildcard deny rule
+        - GMAIL_MOVE_TO_TRASH
+        - GOOGLECALENDAR_DELETE_EVENT
+        - GOOGLECALENDAR_CLEAR_CALENDAR
+      allow_destructive: false
+    # claude.ai connectors use a claude.ai login in your Claude CLI, so they're off by default
+    # (personal setups only; docs/connectors.md §4.7).
+    claude_ai_Gmail:              # your claude.ai Gmail connector (no API keys needed)
+      enabled: false
+      allowed_tools: [search_threads, get_thread, get_message, list_labels, list_drafts, get_draft]
+      side_effecting: [create_draft, update_draft, label_thread, unlabel_thread, label_message, unlabel_message]
+      destructive:                # off: sending, trash, spam and label admin
+        - send_message
+        - reply
+        - forward
+        - delete_draft
+        - trash_thread
+        - untrash_thread
+        - trash_message
+        - untrash_message
+        - mark_thread_spam
+        - unmark_thread_spam
+        - mark_message_spam
+        - unmark_message_spam
+        - apply_sensitive_thread_label
+        - apply_sensitive_message_label
+        - update_message_labels
+        - create_label
+        - update_label
+        - delete_label
+      allow_destructive: false
+      route: deep
+      route_keywords: [email, emails, gmail, inbox, mail]
+    claude_ai_Google_Calendar:    # your claude.ai Google Calendar connector
+      enabled: false
+      allowed_tools: [list_events, get_event, list_calendars, search_events, suggest_time]
+      side_effecting: [create_event, update_event, respond_to_event]
+      destructive: [delete_event]
+      allow_destructive: false
+      route: deep
+      route_keywords: [calendar, meeting, meetings]
+    composio_outlook:             # work/school tenants may need admin consent (spec §12)
+      enabled: false
+      allowed_tools: [OUTLOOK_LIST_MESSAGES, OUTLOOK_GET_MESSAGE, OUTLOOK_LIST_EVENTS, OUTLOOK_LIST_CALENDARS]
+      side_effecting: []
+      destructive: [OUTLOOK_SEND_EMAIL, OUTLOOK_SEND_DRAFT, OUTLOOK_DELETE_MESSAGE, OUTLOOK_MOVE_MESSAGE]
+      allow_destructive: false
+
+# "Hey Spark, let's start a new project called weather-bot" (start_project tool, Phase 3).
+# Always confirmed by voice first. Creates <root_dir>/<name> with git and a first commit, then
+# (optionally) a GitHub repo and a tracking issue through the gh CLI and its own login. Never pushes.
+projects:
+  root_dir: ~/Projects        # new project folders go here (~ and config-relative paths allowed)
+  repo_host: gh               # gh (GitHub CLI, uses `gh auth login`) | none (local folder only)
+  github_owner: null          # null = your gh account; or an organization name
+  github_private: true        # new GitHub repos are private unless you ask for public
+  tracker: github_issue       # github_issue (an issue in the new repo) | none
+  open_claude_code: false     # open a Claude Code window in the new folder afterwards
+  gh_path: gh                 # GitHub CLI executable
+  claude_path: claude         # Claude Code CLI executable
+  command_timeout_s: 60.0     # per gh / git command
+
+app:
+  name: Spark                 # what the assistant calls itself
+  name_aliases: [Sparks, Sparky]  # how speech-to-text may spell the name
+  wake_phrase: Hey Spark      # what you say to wake it, shown in the desktop window
+  persona: standard           # how it talks: standard | butler (a British butler with a dry wit;
+                              # pair it with a British voice, e.g. tts kokoro bm_george). See docs/persona.md
+  address_as: sir             # what the butler calls you ("" = no title)
+  wake_reply: null            # true: say "Yes, sir?" instead of the wake chime; null = the persona's default
+  barge_in: false             # wake word while speaking/thinking stops TTS and listens again. Enable only
+                              # with an echo-cancelling speakerphone, or Spark may wake itself
+  earcons: true
+  thinking_earcon: true
+  sounds_dir: assets/sounds   # wake.wav, thinking.wav, error.wav, sleep.wav
+  prefs_file: prefs.json      # choices made in the app (model mode, models); managed by the app
+
+# Awake and asleep (Phase 5). After a reply Spark keeps listening with no wake word for awake_s;
+# every request restarts the countdown. After that much silence it plays the sleep chime and
+# only the wake word wakes it. (The old app.follow_up_s still works and overrides awake_s.)
+attention:
+  awake_s: 180.0
+  sleep_earcon: sleep         # "" = no chime when falling asleep
+  # Speech heard while awake is answered only if it's meant for Spark (when unsure: silence).
+  # rules (instant, offline) | fast_model (asks the fast model, rules on timeout) | off
+  addressee: rules
+  addressee_timeout_s: 1.5
+  question_window_s: 30.0     # after Spark asks something, any answer within this counts
+  # Every wake starts a fresh Claude session (prepared in the background when Spark falls
+  # asleep). The last conversation's exchanges are carried into it if it ended within this long.
+  carry_over_s: 1800.0
+  carry_over_exchanges: 6
+
+# Activity log (Phase 5): everything said, every route, tool call and full tool result,
+# confirmation, command and ignored utterance, one JSONL file per day, hash-chained and with
+# secrets redacted. It feeds History, summaries and memory. Kept forever unless you delete it.
+activity:
+  enabled: true
+  dir: history                # next to this file (the installed app: %LOCALAPPDATA%\HeySpark\history)
+  tool_results: full          # full | excerpt (first excerpt_chars) | meta (size and status only)
+  excerpt_chars: 2000
+  retention_days: 0           # 0 = keep forever
+
+# Voice shortcuts (Phase 5): say a trigger phrase ("good morning, how is today looking") and
+# Spark sends the detailed prompt you wrote for it. Edit them in the Shortcuts window or in
+# shortcuts.json next to this file (re-read on change; seeded with examples when missing).
+shortcuts:
+  enabled: true
+  file: shortcuts.json
+  max_extra_words: 6          # words allowed beyond the trigger phrases (kept as context)
+  seed_examples: true
+
+# Spark's memory (Phase 5): Markdown files you can read and edit, next to this file.
+# memory/connectors/<SERVER>.md holds what Spark learned about each connected system (where
+# data lives, queries that worked), so it queries directly instead of exploring every time.
+memory:
+  enabled: true
+  dir: memory
+  note_chars: 600            # longest single note
+  connector_file_chars: 6000 # past this, Spark rewrites a connector's notes shorter
+  briefing_chars: 8000       # connector notes included in each new session
+
+desktop:                      # the desktop window: uv run python -m spark desktop
+  autostart_listening: false  # true = start listening as soon as the window opens
+  log_file: spark.log          # app log under logging.dir (the window has no console)
+
+logging:
+  level: INFO
+  dir: logs
+  transcripts: true           # set false to disable transcript logging entirely
+  transcript_file: transcripts.log
+  max_bytes: 1000000          # rotate transcripts at ~1 MB
+  backup_count: 5
+
+latency:
+  enabled: true
+  file: latency.jsonl         # per-turn breakdown, in logging.dir
+
+debug_audio:
+  enabled: false              # --debug-audio saves the last utterance; no audio stored by default
+  dir: debug_audio
+
+# Spoken confirmation of side-effecting tools (spark/brain/confirm.py, Phase 3). Spark says one line
+# ("I'll create a GitHub repo called weather-bot. Go ahead?") and waits for yes or no. Silence, an
+# unclear answer or "no" all mean the action does NOT run. Destructive and unlisted tools are never asked.
+confirm:
+  timeout_s: 8.0             # voice: seconds to start answering before it counts as no answer
+  text_timeout_s: 60.0       # --text: seconds to type y/n
+  hook_timeout_s: 120.0      # the CLI's hook timeout (must exceed the answer timeouts by 30 s)
+  reprompt_unclear: true     # ask "was that a yes or a no?" once after an unclear answer
+  earcon: wake               # cue before listening for the answer ("" = none)
+  yes_phrases: []            # extra yes phrases on top of the built-ins (yes, yeah, sure, go ahead, ...)
+  no_phrases: []             # extra no phrases on top of the built-ins (no, nope, stop, cancel, wait, ...)
+
+# Fast/deep routing (spark/brain/router.py, spec §8.4). Rules pick the model per turn inside ONE
+# conversation (client.set_model, no reconnect), so context carries across fast and deep turns.
+# Deep: creation or multi-step work, any action that changes something (send, delete, schedule,
+# set up, ...), 2+ imperative clauses, or more than max_fast_words words.
+# Fast: everything else (status, lookups, time and timers, small talk), with a limited tool set.
+routing:
+  enabled: true               # false = always brain.fast_model
+  classifier: rules           # rules | fast_model (a tiny extra call on fast_model; rules on timeout/error)
+  classifier_timeout_s: 1.5
+  ack_after_s: 5.0            # deep turn with no reply text yet after this long: say ack_text (0 = never)
+  ack_text: null              # null = the persona's line ("On it, give me a moment.")
+  max_fast_words: 25
+  deep_phrases: ["new project", "start a project", "summarize this week", "summarize the week",
+                 "summarise this week", "draft a plan", "make a plan", "step by step", "in detail",
+                 "pros and cons"]
+  # Deep when a clause starts with one (after "please", "let's", "I want to", ...). Includes
+  # every side-effect verb, since fast turns can't use side-effecting tools (fast_tools below).
+  # Words often used as nouns in questions ("open PRs?", "schedule for today?") appear only
+  # with an article ("open a", "schedule a").
+  deep_verbs: [add, analyse, analyze, archive, assign, "book a", "book an", brainstorm, build,
+               cancel, close, commit, compare, create, debug, delete, design, draft, edit,
+               "email the", forward, implement, investigate, invite, merge, move, "open a",
+               "open an", organize, outline, plan, "post a", "post an", prepare, publish, push,
+               refactor, remove, rename, reply, research, review, "schedule a", "schedule an",
+               send, "set up", "share a", "share my", "share the", "start a", "start an",
+               "start the", submit, summarise, summarize, update, upload, write]
+  # Checked before deep_verbs, so "cancel the timer" and "start a timer" stay fast.
+  fast_keywords: ["what time", "time is it", "what day", "what's the date",
+                  "today's date", timer, timers, "working on", "your status", "how are you",
+                  hello, "thank you", thanks, "good morning", "good night"]
+  # Tools a fast turn may call, enforced per call by the confirmation gate (one session, no
+  # reconnect). [] = every read-only tool (each server's allowed_tools plus Spark's own read-only
+  # tools: time, timers, status). Or list exact full names, e.g. ["mcp__spark__current_time"].
+  # Anything else is refused on a fast turn without asking, and the next turn goes deep.
+  fast_tools: []

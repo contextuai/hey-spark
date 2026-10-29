@@ -1,0 +1,203 @@
+name: Build apps
+
+# Builds the desktop apps: the macOS disk image (Apple Silicon) and the Windows installer.
+#
+#   - release.yml calls it (workflow_call) for every release, with sign: true.
+#   - Pull requests that touch packaging or the desktop app run it too, so a packaging change is
+#     proven on a real runner and the PR carries a DMG and an installer to try (Actions >
+#     this run > Artifacts). PR builds are never signed.
+#   - Run it by hand (workflow_dispatch) for a test build of any branch.
+#
+# macOS signing is optional. With these repository secrets the app is signed with a Developer ID
+# and the DMG notarized; without them it is ad hoc signed and Gatekeeper asks users to allow it:
+#   MACOS_CERT_P12_BASE64  Developer ID Application certificate + key, .p12, base64-encoded
+#   MACOS_CERT_PASSWORD    the .p12 password
+#   MACOS_SIGN_IDENTITY    e.g. "Developer ID Application: Name (TEAMID)"
+#   APPLE_ID, APPLE_TEAM_ID, APPLE_APP_PASSWORD  notarization (app-specific password)
+# The Windows installer is not code-signed yet.
+
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to build (default: the triggering commit)"
+        type: string
+        default: ""
+      sign:
+        description: "Sign and notarize the macOS app when the secrets exist"
+        type: boolean
+        default: false
+    outputs:
+      macos_notarized:
+        description: "'true' when the DMG was signed with a Developer ID and notarized"
+        value: ${{ jobs.macos.outputs.notarized }}
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "packaging/**"
+      - "scripts/build_*"
+      - "spark/desktop/**"
+      - ".github/workflows/build-apps.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-apps-${{ github.event.pull_request.number || inputs.ref || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  macos:
+    name: macOS app (Apple Silicon)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    outputs:
+      notarized: ${{ steps.build.outputs.notarized }}
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Set up uv and Python 3.11
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      # Only on signed builds, and only when the certificate secret exists. The keychain is
+      # temporary and deleted at the end of the job.
+      - name: Import signing certificate
+        id: cert
+        if: inputs.sign
+        env:
+          CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+        run: |
+          set -euo pipefail
+          if [[ -z "$CERT_P12_BASE64" ]]; then
+            echo "::notice::No MACOS_CERT_P12_BASE64 secret: building an ad hoc signed app."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          keychain_password=$(openssl rand -hex 24)
+          printf '%s' "$CERT_P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$keychain_password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$keychain_password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$keychain_password" "$keychain" >/dev/null
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+          echo "signed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Build app and DMG
+        id: build
+        env:
+          MACOS_SIGN_IDENTITY: ${{ steps.cert.outputs.signed == 'true' && secrets.MACOS_SIGN_IDENTITY || '' }}
+          APPLE_ID: ${{ steps.cert.outputs.signed == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_TEAM_ID: ${{ steps.cert.outputs.signed == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_APP_PASSWORD: ${{ steps.cert.outputs.signed == 'true' && secrets.APPLE_APP_PASSWORD || '' }}
+        run: |
+          set -euo pipefail
+          bash scripts/build_macos.sh
+          notarized=false
+          if [[ -n "$MACOS_SIGN_IDENTITY" && -n "$APPLE_ID" && -n "$APPLE_TEAM_ID" && -n "$APPLE_APP_PASSWORD" ]]; then
+            notarized=true
+          fi
+          echo "notarized=$notarized" >> "$GITHUB_OUTPUT"
+
+      - name: Collect DMG
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp build/installer/HeySpark-*-macos-*.dmg release-assets/
+          cd release-assets
+          for f in *.dmg; do shasum -a 256 "$f" > "$f.sha256"; done
+          ls -la
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-macos
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Remove signing keychain
+        if: always() && steps.cert.outputs.signed == 'true'
+        run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 60
+    env:
+      PYTHONUTF8: "1"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Set up uv and Python 3.11
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      # Inno Setup 6 is preinstalled on the windows-2025 image; install it with
+      # Chocolatey (also preinstalled) only when the image no longer has it.
+      - name: Ensure Inno Setup 6
+        shell: pwsh
+        run: |
+          $iscc = @(
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe"
+          ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if ($iscc) {
+            Write-Host "Inno Setup found: $iscc"
+          } else {
+            choco install innosetup -y --no-progress
+            if ($LASTEXITCODE -ne 0) { throw "choco install innosetup failed" }
+          }
+
+      - name: Build installer
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build_windows.ps1
+
+      # The exe is windowed (no console), so read the exit code rather than the output.
+      - name: Smoke test the frozen app
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath build\dist\HeySpark\HeySpark.exe -ArgumentList "--self-test" -Wait -PassThru -NoNewWindow
+          if ($p.ExitCode -ne 0) { throw "HeySpark.exe --self-test failed ($($p.ExitCode))" }
+
+      # build_windows.ps1 exits 0 with a warning when Inno Setup is missing, so check
+      # for the installer explicitly.
+      - name: Collect installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          version=$(uv run python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          installer="build/installer/HeySpark-Setup-${version}.exe"
+          if [[ ! -f "$installer" ]]; then
+            echo "::error::$installer was not produced."
+            ls -la build/installer || true
+            exit 1
+          fi
+          mkdir -p release-assets
+          cp "$installer" release-assets/
+          (cd release-assets && sha256sum "HeySpark-Setup-${version}.exe" > "HeySpark-Setup-${version}.exe.sha256")
+          ls -la release-assets/
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: installer-windows
+          path: release-assets/*
+          if-no-files-found: error
+          retention-days: 14

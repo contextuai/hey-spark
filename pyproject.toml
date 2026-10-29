@@ -1,0 +1,92 @@
+[project]
+name = "hey-spark"
+version = "0.1.0"
+description = "Hey Spark, by ContextuAI: a wake-word voice assistant with Claude (or any OpenAI-compatible model) as the brain and MCP servers as connectors"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [
+    { name = "Nagendra Rao Jogi" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "claude-agent-sdk>=0.2.159",
+    "faster-whisper>=1.2.1",
+    "httpx~=0.28.1",
+    "huggingface-hub>=1.32.0",
+    "mcp~=2.2",
+    "numpy>=2.4.6",
+    "piper-tts>=1.8.0",
+    "pvporcupine>=4.0.3",
+    "pydantic>=2.13.5",
+    "pydantic-settings>=2.15.0",
+    "python-dotenv>=1.2.3",
+    "pyyaml>=6.0.3",
+    "rich>=15.0.0",
+    "sounddevice>=0.5.6",
+]
+
+[project.urls]
+Homepage = "https://github.com/contextuai/hey-spark"
+Issues = "https://github.com/contextuai/hey-spark/issues"
+Organization = "https://contextuai.com"
+
+[project.scripts]
+spark = "spark.__main__:main"
+
+[project.optional-dependencies]
+oww = [
+    "openwakeword>=0.6.0",
+]
+deepgram = [
+    "deepgram-sdk>=7.10.0",
+]
+kokoro = [
+    "kokoro-onnx>=0.6.1",
+]
+elevenlabs = [
+    "elevenlabs>=2.69.0",
+]
+desktop = [
+    "pywebview>=6.2.1",
+]
+
+[build-system]
+requires = ["uv_build>=0.10.4,<0.14.0"]
+build-backend = "uv_build"
+
+[tool.uv.build-backend]
+module-name = "spark"
+module-root = ""
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+markers = [
+    "live: hits real Claude / network / API keys (opt-in: -m live)",
+    "hardware: needs a real microphone or speaker",
+]
+addopts = "-m 'not live and not hardware'"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".models", "debug_audio", "logs", ".claude", "*.md", "*.ipynb"]  # notebooks run in Colab
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "ASYNC", "SIM", "RUF"]
+ignore = ["RUF001", "RUF002", "RUF003"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[dependency-groups]
+build = [
+    "pyinstaller>=6.22.3",
+]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.8",
+]

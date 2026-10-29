@@ -1,0 +1,87 @@
+name: Bug report
+description: Something in Hey Spark doesn't work as expected
+title: "fix: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. **Security problems don't belong here**: please use
+        private vulnerability reporting instead (see SECURITY.md).
+
+        Before pasting logs or `spark doctor` output, **remove API keys, tokens, URLs with
+        credentials, and anything else secret.**
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+      placeholder: I said "Hey Spark, set a timer for 5 minutes" and ...
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Start the desktop app
+        2. Say ...
+        3. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Hey Spark version
+      description: The installer name (HeySpark-Setup-X.Y.Z.exe) or the commit you run from source.
+      placeholder: 0.1.0
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: Operating system
+      placeholder: Windows 11 24H2
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it?
+      options:
+        - Windows installer (desktop app)
+        - From source, desktop app (spark desktop)
+        - From source, voice mode (spark)
+        - From source, text mode (spark --text)
+    validations:
+      required: true
+  - type: dropdown
+    id: brain
+    attributes:
+      label: Brain backend
+      options:
+        - Claude (claude CLI login)
+        - Claude (Anthropic API key)
+        - OpenAI-compatible (OpenAI, Azure, OpenRouter, Groq, Together, ...)
+        - OpenAI-compatible, local (Ollama, LM Studio, vLLM)
+        - Mock
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: audio
+    attributes:
+      label: Microphone and speaker (if audio related)
+      placeholder: Jabra Speak 510 / laptop mic and speakers
+  - type: textarea
+    id: doctor
+    attributes:
+      label: "`spark doctor` output (secrets removed)"
+      description: Run `uv run spark doctor` (from source). Remove any secrets before pasting.
+      render: text
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log lines (secrets removed)
+      description: From `logs/` (source) or `%LOCALAPPDATA%\HeySpark\logs` (installer), including `crash.log` if present.
+      render: text

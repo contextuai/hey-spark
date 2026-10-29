@@ -1,0 +1,259 @@
+name: Release
+
+# Single-workflow release, modeled on ContextuAI Solo. Three trigger paths, one pipeline:
+#
+#   1. workflow_dispatch with a version input (e.g. v0.1.0 or v0.1.0-2). Tags the
+#      dispatched commit, then builds and publishes. Useful for re-running a release.
+#
+#   2. push of a v* tag. The tag already exists: skip tagging, build and publish.
+#
+#   3. push to main whose commit subject strictly matches
+#      `chore: release vX.Y.Z(-N)( (#NNN))?`, i.e. the squash merge of a
+#      release-bump PR. Verify the version files, tag, build and publish.
+#
+# Everything happens in one run because a tag pushed with GITHUB_TOKEN does not
+# trigger other workflows (GitHub's anti-recursion rule), so a separate
+# "on: push tags" workflow would never fire for path 3.
+#
+# Tags are vX.Y.Z or vX.Y.Z-N (numeric suffix only). A -N tag is published as a
+# GitHub pre-release. Note: PEP 440 normalizes "X.Y.Z-N" to "X.Y.Z.postN", which is
+# how uv.lock records it; the compute job accepts either spelling there.
+#
+# Both apps are built by build-apps.yml (also run on packaging PRs): the macOS DMG first,
+# then the Windows installer. The macOS app is Developer ID signed and notarized when the
+# signing secrets exist (see build-apps.yml), otherwise ad hoc signed. The Windows installer
+# is not code-signed yet. The release notes say which.
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release tag (vX.Y.Z or vX.Y.Z-N, e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+# One release at a time; never cancel a release half-way through publishing.
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # -- Compute: decide whether to release, resolve the tag, verify the version files --
+  compute:
+    name: Determine release
+    runs-on: ubuntu-latest
+    # Fast path: skip the whole workflow for ordinary pushes to main.
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'chore: release v'))
+    outputs:
+      release_tag: ${{ steps.tag.outputs.release_tag }}
+      version: ${{ steps.tag.outputs.version }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
+      should_release: ${{ steps.tag.outputs.should_release }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Resolve tag and verify version files
+        id: tag
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DISPATCH_VERSION: ${{ github.event.inputs.version }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+          tag_pattern='^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?$'
+          release_tag=""
+          from_main=false
+
+          case "$EVENT_NAME" in
+            workflow_dispatch)
+              release_tag="$DISPATCH_VERSION"
+              ;;
+            push)
+              if [[ "$REF" == refs/tags/v* ]]; then
+                release_tag="${REF#refs/tags/}"
+              elif [[ "$REF" == refs/heads/main ]]; then
+                # Strict parse of the squash-merge subject; anything else is not a release.
+                subject=$(printf '%s' "$COMMIT_MSG" | head -n1)
+                pattern='^chore: release (v[0-9]+\.[0-9]+\.[0-9]+(-[0-9]+)?)( \(#[0-9]+\))?$'
+                if [[ "$subject" =~ $pattern ]]; then
+                  release_tag="${BASH_REMATCH[1]}"
+                  from_main=true
+                else
+                  echo "::notice::Subject '$subject' does not match the release pattern. Skipping."
+                fi
+              fi
+              ;;
+          esac
+
+          should_release=false
+          version=""
+          prerelease=false
+          if [[ -n "$release_tag" ]]; then
+            if [[ ! "$release_tag" =~ $tag_pattern ]]; then
+              echo "::error::'$release_tag' is not a valid release tag (expected vX.Y.Z or vX.Y.Z-N)."
+              exit 1
+            fi
+            version="${release_tag#v}"
+            [[ "$version" == *-* ]] && prerelease=true
+            # PEP 440 spelling of X.Y.Z-N, as uv.lock may record it.
+            normalized="$version"
+            [[ "$version" == *-* ]] && normalized="${version%-*}.post${version##*-}"
+
+            # The checked-out commit must already carry this version in every file.
+            PYPROJECT=$(python3 -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+            INIT=$(sed -nE 's/^__version__[[:space:]]*=[[:space:]]*"([^"]+)".*/\1/p' spark/__init__.py | head -n1)
+            LOCK=$(python3 -c "import tomllib; print(next(p['version'] for p in tomllib.load(open('uv.lock','rb'))['package'] if p['name']=='hey-spark'))")
+            echo "Expected: $version (uv.lock may say $normalized)"
+            echo "  pyproject.toml:     $PYPROJECT"
+            echo "  spark/__init__.py:  $INIT"
+            echo "  uv.lock (hey-spark): $LOCK"
+
+            fail=0
+            [[ "$PYPROJECT" != "$version" ]] && { echo "::error::pyproject.toml version ($PYPROJECT) != $version"; fail=1; }
+            [[ "$INIT" != "$version" ]] && { echo "::error::spark/__init__.py __version__ ($INIT) != $version"; fail=1; }
+            [[ "$LOCK" != "$version" && "$LOCK" != "$normalized" ]] && { echo "::error::uv.lock hey-spark version ($LOCK) != $version (run 'uv lock')"; fail=1; }
+            [[ "$fail" == "1" ]] && exit 1
+
+            should_release=true
+            # Idempotent on the main path: a re-run after the tag exists does nothing.
+            if [[ "$from_main" == "true" ]] && gh api "repos/$REPO/git/ref/tags/$release_tag" >/dev/null 2>&1; then
+              echo "::warning::Tag $release_tag already exists. Skipping the release."
+              should_release=false
+            fi
+          fi
+
+          {
+            echo "release_tag=$release_tag"
+            echo "version=$version"
+            echo "prerelease=$prerelease"
+            echo "should_release=$should_release"
+          } >> "$GITHUB_OUTPUT"
+          echo "Computed: release_tag='$release_tag' version='$version' prerelease=$prerelease should_release=$should_release"
+
+  # -- Tag: dispatch and chore-on-main paths only (a tag push already has its tag) --
+  # Created through the REST API rather than `git push`, as in Solo: it works even when
+  # the repository's default workflow permissions are read-only for git pushes.
+  tag:
+    name: Create tag
+    needs: [compute]
+    if: |
+      needs.compute.outputs.should_release == 'true' && (
+        github.event_name == 'workflow_dispatch' ||
+        (github.event_name == 'push' && github.ref == 'refs/heads/main')
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create tag via REST API
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.compute.outputs.release_tag }}
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          echo "Ensuring tag $RELEASE_TAG at $TARGET_SHA"
+          # Capture the SHA only when the lookup succeeds; a 404 prints a JSON body.
+          existing_sha=""
+          if ! existing_sha=$(gh api "repos/$REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha' 2>/dev/null); then
+            existing_sha=""
+          fi
+          if [[ -n "$existing_sha" ]]; then
+            if [[ "$existing_sha" == "$TARGET_SHA" ]]; then
+              echo "Tag $RELEASE_TAG already exists at $TARGET_SHA. Nothing to do."
+              exit 0
+            fi
+            echo "::error::Tag $RELEASE_TAG already exists at $existing_sha, not $TARGET_SHA. Refusing to move a published tag."
+            exit 1
+          fi
+          gh api "repos/$REPO/git/refs" -f "ref=refs/tags/$RELEASE_TAG" -f "sha=$TARGET_SHA" --silent
+          echo "Tag created."
+
+  # -- Build: the macOS DMG and the Windows installer (build-apps.yml) --
+  build:
+    name: Build apps
+    needs: [compute, tag]
+    # `tag` is skipped on tag pushes; don't let that skip cascade into the build.
+    if: |
+      always() && needs.compute.outputs.should_release == 'true' && (
+        needs.tag.result == 'success' || needs.tag.result == 'skipped'
+      )
+    uses: ./.github/workflows/build-apps.yml
+    with:
+      ref: ${{ needs.compute.outputs.release_tag }}
+      sign: true
+    secrets: inherit
+
+  # -- Publish: create the GitHub Release (pre-release for -N tags) --
+  release:
+    name: Publish release
+    needs: [compute, build]
+    if: |
+      always()
+      && needs.compute.outputs.should_release == 'true'
+      && needs.build.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_TAG: ${{ needs.compute.outputs.release_tag }}
+      VERSION: ${{ needs.compute.outputs.version }}
+      PRERELEASE: ${{ needs.compute.outputs.prerelease }}
+      MACOS_NOTARIZED: ${{ needs.build.outputs.macos_notarized }}
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: installer-*
+          merge-multiple: true
+          path: release-assets
+
+      - name: Create GitHub release
+        run: |
+          set -euo pipefail
+          ls -la release-assets/
+          {
+            echo "## Download"
+            echo
+            echo "**macOS** (Apple Silicon, macOS 14+): \`HeySpark-${VERSION}-macos-arm64.dmg\`. Open it and drag"
+            echo "HeySpark into Applications."
+            if [[ "$MACOS_NOTARIZED" != "true" ]]; then
+              echo "This build isn't notarized by Apple yet: if macOS says it can't verify the app, open"
+              echo "*System Settings → Privacy & Security* and click **Open Anyway**."
+            fi
+            echo
+            echo "**Windows** (Windows 11): \`HeySpark-Setup-${VERSION}.exe\`. The installer isn't code-signed"
+            echo "yet, so SmartScreen may warn on first run (*More info* → *Run anyway*)."
+            echo
+            echo "Compare each file with the \`.sha256\` checksum next to it. The bundled \"Hey Spark\""
+            echo "wake-word model is licensed CC BY-NC-SA 4.0 (non-commercial); the code is MIT."
+          } > notes.md
+          cat notes.md
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            echo "Release $RELEASE_TAG already exists; replacing its assets."
+            gh release upload "$RELEASE_TAG" release-assets/* --clobber
+            exit 0
+          fi
+
+          flags=(--verify-tag --title "Hey Spark $RELEASE_TAG" --notes-file notes.md --generate-notes)
+          [[ "$PRERELEASE" == "true" ]] && flags+=(--prerelease)
+          gh release create "$RELEASE_TAG" release-assets/* "${flags[@]}"

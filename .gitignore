@@ -1,0 +1,35 @@
+# Python / tooling
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Local, machine-specific overrides (e.g. config.local.yaml, mcp_servers.local.json)
+*.local.*
+.claude/settings.local.json
+
+# Downloaded models and build output
+.models/
+build/
+dist/
+
+# Runtime data written next to config.yaml (anchored to the repo root so
+# folders such as docs/dev/history/ stay tracked)
+logs/
+debug_audio/
+/history/
+/memory/
+connectors.json
+claudeai_connectors.json
+shortcuts.json
+prefs.json
+.claude/worktrees/
+
+# Local screenshots
+docs/Screenshot*.png

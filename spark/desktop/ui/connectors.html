@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Connectors</title>
+<style>
+  :root {
+    --bg: #F6F7F9;
+    --surface: #FFFFFF;
+    --sunken: #EEF0F3;
+    --line: #E3E6EB;
+    --text: #15181E;
+    --muted: #677080;
+    --accent: #E63900;
+    --accent-soft: #FF47001F;
+    --ok: #10B981;
+    --warn: #F59E0B;
+    --err: #EF4444;
+    --off: #A3AAB6;
+    --btn: #15181E;
+    --btn-text: #FFFFFF;
+    --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318;
+      --surface: #1A1D24;
+      --sunken: #15181E;
+      --line: #2A2F39;
+      --text: #ECEEF2;
+      --muted: #9199A8;
+      --off: #5B6371;
+      --btn: #ECEEF2;
+      --btn-text: #111318;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13.5px/1.45 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    display: grid; grid-template-columns: 270px 1fr; overflow: hidden;
+  }
+  button {
+    appearance: none; font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); padding: 6px 12px; font-weight: 500;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--btn); color: var(--btn-text); border-color: var(--btn); }
+  button.danger { color: var(--err); }
+  button.danger.armed { background: var(--err); color: #fff; border-color: var(--err); }
+
+  /* --- sidebar -------------------------------------------------------------------------- */
+  aside { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--sunken); }
+  .side-head { padding: 16px 14px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .side-head h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .list { overflow-y: auto; padding: 0 8px 12px; flex: 1; }
+  .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 12px 8px 6px; }
+  .item {
+    display: grid; grid-template-columns: 10px 1fr auto; gap: 10px; align-items: center;
+    padding: 8px 8px; border-radius: 8px; cursor: pointer; border: 1px solid transparent;
+  }
+  .item:hover { background: var(--surface); }
+  .item.sel { background: var(--surface); border-color: var(--line); }
+  .item .nm { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .item .sub { font-size: 12px; color: var(--muted); }
+  .item .on { font-size: 11px; color: var(--muted); }
+  .item .on.yes { color: var(--ok); font-weight: 600; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--off); }
+  .dot.ok { background: var(--ok); } .dot.error { background: var(--err); } .dot.untested { background: var(--warn); }
+  .dot.busy { background: var(--accent); animation: pulse 1s ease-in-out infinite; }
+  @keyframes pulse { 50% { opacity: .3; } }
+  .empty-list { color: var(--muted); padding: 8px 10px; font-size: 12.5px; }
+
+  /* --- main ----------------------------------------------------------------------------- */
+  main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .banner {
+    display: flex; align-items: center; gap: 12px; justify-content: space-between;
+    padding: 9px 20px; background: var(--accent-soft); border-bottom: 1px solid var(--line); font-size: 13px;
+  }
+  .pane { flex: 1; overflow-y: auto; padding: 20px 24px 28px; min-height: 0; }
+  h2 { font-size: 18px; margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+  .head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+  .meta { margin-top: 4px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .spark { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); white-space: nowrap; }
+  .target { margin-top: 6px; color: var(--muted); font-family: var(--mono); font-size: 12px; overflow-wrap: anywhere; user-select: text; }
+  .actions { display: flex; gap: 8px; margin: 16px 0 12px; flex-wrap: wrap; }
+  .status { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); margin-bottom: 18px; display: flex; gap: 10px; align-items: baseline; }
+  .status.error { border-color: color-mix(in srgb, var(--err) 40%, var(--line)); }
+  .status .msg { user-select: text; overflow-wrap: anywhere; }
+
+  /* switch */
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; white-space: nowrap; }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .track { width: 38px; height: 22px; border-radius: 999px; background: var(--off); position: relative; transition: background .2s; flex: none; }
+  .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .switch input:checked + .track { background: var(--ok); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .switch input:disabled + .track { opacity: .5; }
+
+  /* tools */
+  .tools-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 8px; flex-wrap: wrap; }
+  .tools-head h3 { margin: 0; font-size: 14px; }
+  .filter { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 8px; padding: 5px 10px; font: inherit; width: 200px; }
+  .tools { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); overflow: hidden; }
+  .tool { display: grid; grid-template-columns: 1fr auto; gap: 14px; align-items: center; padding: 10px 14px; border-top: 1px solid var(--line); }
+  .tool:first-child { border-top: 0; }
+  .tool .tn { font-family: var(--mono); font-size: 12.5px; font-weight: 600; overflow-wrap: anywhere; }
+  .tool .td { color: var(--muted); font-size: 12.5px; margin-top: 2px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .tool .td:hover { -webkit-line-clamp: unset; }
+  .hint { font-size: 10.5px; border-radius: 4px; padding: 0 5px; margin-left: 6px; font-family: inherit; font-weight: 500; vertical-align: 1px; }
+  .hint.read { color: var(--ok); border: 1px solid currentColor; }
+  .hint.destructive { color: var(--err); border: 1px solid currentColor; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--sunken); }
+  .seg button { border: 0; border-radius: 0; background: transparent; padding: 4px 10px; font-size: 12px; color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { color: var(--text); background: var(--surface); font-weight: 600; }
+  .seg button[aria-pressed="true"][data-mode="allow"] { color: var(--ok); }
+  .seg button[aria-pressed="true"][data-mode="ask"] { color: var(--warn); }
+  .seg button[aria-pressed="true"][data-mode="off"] { color: var(--muted); }
+  .legend { display: flex; gap: 18px; color: var(--muted); font-size: 12px; margin-top: 10px; flex-wrap: wrap; }
+  .legend b { font-weight: 600; }
+  .note { color: var(--muted); font-size: 12.5px; margin: 12px 0 0; }
+
+  /* add / edit */
+  textarea {
+    width: 100%; min-height: 260px; resize: vertical; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--surface); color: var(--text); font-family: var(--mono); font-size: 12.5px; padding: 12px; line-height: 1.5;
+  }
+  .help { color: var(--muted); font-size: 12.5px; margin: 6px 0 14px; max-width: 720px; }
+  .help code { font-family: var(--mono); font-size: 12px; }
+  .err { color: var(--err); margin-top: 10px; user-select: text; overflow-wrap: anywhere; }
+
+  /* route, live status, notes (P5.7j) */
+  .live { font-size: 12.5px; color: var(--muted); margin: -10px 0 16px; display: flex; gap: 8px; align-items: baseline; }
+  .live.down { color: var(--err); }
+  .setting { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: 10px; background: var(--surface); margin-bottom: 18px; }
+  .setting .what b { display: block; font-weight: 600; }
+  .setting .what span { color: var(--muted); font-size: 12.5px; }
+  .notes-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 22px 0 8px; flex-wrap: wrap; }
+  .notes-head h3 { margin: 0; font-size: 14px; }
+  textarea.notes { min-height: 150px; font-size: 12.5px; }
+  .notes-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+  .saved { color: var(--ok); font-size: 12.5px; }
+  .results { margin-top: 16px; display: grid; gap: 8px; }
+  .result { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--surface); }
+  .result ul { margin: 4px 0 0; padding-left: 18px; color: var(--muted); font-size: 12.5px; }
+  .welcome { max-width: 520px; margin: 60px auto; text-align: center; color: var(--muted); }
+  .welcome h2 { color: var(--text); margin-bottom: 8px; }
+  .welcome .actions { justify-content: center; }
+</style>
+</head>
+<body>
+  <aside>
+    <div class="side-head">
+      <h1>Connectors</h1>
+      <button class="primary" id="addBtn" type="button">+ Add</button>
+    </div>
+    <div class="list" id="list"></div>
+  </aside>
+
+  <main>
+    <div class="banner" id="banner" hidden>
+      <span id="bannerText">Changes take effect after Spark reconnects.</span>
+      <button class="primary" id="applyBtn" type="button">Apply now</button>
+    </div>
+    <div class="pane" id="pane"></div>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const api = () => window.pywebview.api;
+  const S = { servers: [], sel: null, view: "welcome", busy: new Set(), filter: "", dirty: false, running: false,
+              claudeDesktop: null, envFile: "", addResults: null, addError: "", draft: "", editText: "", editError: "",
+              notes: {}, noteDrafts: {}, notesSaved: null };
+
+  // Tiny element builder: el("div", {class: "x", onclick: f}, child, "text", ...)
+  function el(tag, attrs, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else if (k === "class") n.className = v;
+      else if (k === "text") n.textContent = v;
+      else n.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) if (kid !== null && kid !== undefined && kid !== false)
+      n.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    return n;
+  }
+
+  const byName = (name) => S.servers.find((s) => s.name === name);
+  const dotClass = (s) => S.busy.has(s.name) ? "busy" : s.status === "error" ? "error" : (s.status === "untested" || s.status === "needs-auth") ? "untested" : s.enabled ? "ok" : "";
+
+  function ago(iso) {
+    if (!iso) return "";
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return "just now";
+    if (s < 3600) return `${Math.round(s / 60)} min ago`;
+    if (s < 86400) return `${Math.round(s / 3600)} h ago`;
+    return new Date(iso).toLocaleDateString();
+  }
+
+  function counts(s) {
+    const c = { allow: 0, ask: 0, off: 0 };
+    s.tools.forEach((t) => { c[t.mode] = (c[t.mode] || 0) + 1; });
+    return c;
+  }
+
+  // --- data ------------------------------------------------------------------------------
+  async function refresh() {
+    const data = await api().list();
+    S.servers = data.servers; S.dirty = data.dirty; S.running = data.running;
+    S.claudeDesktop = data.claude_desktop; S.envFile = data.env_file;
+    if (S.view === "server" && !byName(S.sel)) { S.view = S.servers.length ? "server" : "welcome"; S.sel = S.servers[0]?.name || null; }
+    render();
+  }
+
+  function replace(server) {
+    const i = S.servers.findIndex((s) => s.name === server.name);
+    if (i >= 0) S.servers[i] = server; else S.servers.push(server);
+  }
+
+  function markDirty() {
+    S.dirty = true;
+    renderBanner();
+  }
+
+  async function test(name) {
+    S.busy.add(name); render();
+    try {
+      const r = await api().test(name);
+      if (r.server) replace(r.server);
+      if (r.server && r.server.enabled && r.server.source === "app") markDirty();
+    } finally {
+      S.busy.delete(name); render();
+    }
+  }
+
+  async function testMany(names) {
+    const queue = [...names];
+    const worker = async () => { while (queue.length) await test(queue.shift()); };
+    await Promise.all([worker(), worker(), worker(), worker()]);
+  }
+
+  async function setEnabled(name, on) {
+    const r = await api().set_enabled(name, on);
+    if (r.server) { replace(r.server); markDirty(); }
+    render();
+  }
+
+  async function setRoute(name, route) {
+    const r = await api().set_route(name, route);
+    if (r.server) { replace(r.server); if (r.server.enabled) markDirty(); }
+    render();
+  }
+
+  async function loadNotes(name) {
+    const r = await api().get_notes(name);
+    if (r && r.ok) { S.notes[name] = r; if (S.sel === name && !(name in S.noteDrafts)) renderPane(); }
+  }
+
+  async function saveNotes(name) {
+    const r = await api().save_notes(name, S.noteDrafts[name] ?? S.notes[name]?.text ?? "");
+    if (r && r.ok) {
+      S.notes[name] = r; delete S.noteDrafts[name]; S.notesSaved = name;
+      const s = byName(name); if (s) s.notes = r.notes;
+      render();
+      setTimeout(() => { if (S.notesSaved === name) { S.notesSaved = null; renderPane(); } }, 2500);
+    }
+  }
+
+  async function setTool(name, tool, mode) {
+    const r = await api().set_tool(name, tool, mode);
+    if (r.server) { replace(r.server); if (r.server.enabled) markDirty(); }
+    render();
+  }
+
+  // --- render ----------------------------------------------------------------------------
+  function render() {
+    renderList();
+    renderBanner();
+    renderPane();
+  }
+
+  function renderBanner() {
+    $("banner").hidden = !S.dirty;
+    $("bannerText").textContent = S.running
+      ? "Spark is still using the old connector settings."
+      : "Changes take effect the next time Spark starts.";
+    $("applyBtn").textContent = S.running ? "Apply and reconnect" : "Apply";
+  }
+
+  function renderList() {
+    const list = $("list");
+    list.replaceChildren();
+    const groups = [["app", "Added here"], ["config", "From config files"], ["claudeai", "claude.ai account"]];
+    for (const [source, label] of groups) {
+      const items = S.servers.filter((s) => s.source === source);
+      if (source !== "app" && !items.length) continue;
+      list.append(el("div", { class: "group", text: label }));
+      if (!items.length) list.append(el("div", { class: "empty-list", text: "Nothing yet. Press + Add." }));
+      for (const s of items) {
+        const sub = S.busy.has(s.name) ? "Testing…"
+          : s.status === "needs-auth" ? "Needs sign-in"
+          : s.source === "claudeai" && s.status === "untested" ? "Not in your account"
+          : s.status === "error" ? "Couldn't connect"
+          : s.status === "untested" ? "Not tested"
+          : `${s.tools.length} tool${s.tools.length === 1 ? "" : "s"}`;
+        list.append(el("div", {
+          class: "item" + (S.view === "server" && S.sel === s.name ? " sel" : ""),
+          role: "button", tabindex: "0",
+          onclick: () => { S.sel = s.name; S.view = "server"; S.filter = ""; render(); },
+          onkeydown: (e) => { if (e.key === "Enter") e.currentTarget.click(); },
+        },
+          el("span", { class: "dot " + dotClass(s) }),
+          el("div", {}, el("div", { class: "nm", text: s.label || s.name, title: s.name }), el("div", { class: "sub", text: sub })),
+          el("span", { class: "on" + (s.enabled ? " yes" : ""), text: s.enabled ? "On" : "Off" }),
+        ));
+      }
+    }
+    list.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
+  }
+
+  function renderPane() {
+    const pane = $("pane");
+    pane.replaceChildren();
+    if (S.view === "add") return pane.append(addView());
+    if (S.view === "edit") return pane.append(editView());
+    const s = byName(S.sel);
+    if (S.view === "server" && s) return pane.append(serverView(s));
+    pane.append(welcomeView());
+  }
+
+  function welcomeView() {
+    return el("div", { class: "welcome" },
+      el("h2", { text: "Connect Spark to your tools" }),
+      el("p", { text: "Add MCP servers by pasting their configuration, the same JSON Claude Desktop uses. Spark tests each one and lists its tools, and you choose which tools it may use." }),
+      el("div", { class: "actions" },
+        el("button", { class: "primary", onclick: () => openAdd() , text: "Add a connector" }),
+        S.claudeDesktop ? el("button", { onclick: importDesktop, text: "Import from Claude Desktop" }) : null,
+      ),
+    );
+  }
+
+  function serverView(s) {
+    const busy = S.busy.has(s.name);
+    const editable = s.source === "app";
+    const account = s.source === "claudeai";  // claude.ai connector: switch, route and tools editable
+    const canEdit = editable || account;
+    const c = counts(s);
+    const wrap = el("div");
+
+    wrap.append(el("div", { class: "head" },
+      el("div", {},
+        el("h2", { text: s.label || s.name }),
+        el("div", { class: "meta" },
+          el("span", { class: "spark", text: s.transport }),
+          canEdit ? null : el("span", { class: "spark", text: "config.yaml" }),
+        ),
+        el("div", { class: "target", text: s.target }),
+      ),
+      el("label", { class: "switch", title: canEdit ? "Let Spark use this server" : "Set in config.yaml" },
+        el("span", { text: s.enabled ? "On" : "Off" }),
+        (() => {
+          const box = el("input", { type: "checkbox", disabled: account ? false : !editable || (!s.enabled && s.status !== "ok"),
+            onchange: (e) => setEnabled(s.name, e.target.checked) });
+          box.checked = s.enabled;
+          return box;
+        })(),
+        el("span", { class: "track" }),
+      ),
+    ));
+
+    const remove = el("button", { class: "danger", type: "button", text: "Remove" });
+    remove.addEventListener("click", async () => {
+      if (!remove.classList.contains("armed")) {
+        remove.classList.add("armed"); remove.textContent = "Click again to remove";
+        setTimeout(() => { remove.classList.remove("armed"); remove.textContent = "Remove"; }, 4000);
+        return;
+      }
+      const wasOn = s.enabled;
+      const r = await api().remove(s.name);
+      if (r.ok) {
+        if (wasOn) markDirty();
+        S.servers = S.servers.filter((x) => x.name !== s.name);
+        S.sel = S.servers[0]?.name || null; S.view = S.sel ? "server" : "welcome"; render();
+      }
+    });
+    const claudeLink = () => el("button", { type: "button", onclick: () => api().open_link(s.link), text: "Open claude.ai connectors" });
+    wrap.append(el("div", { class: "actions" },
+      account ? claudeLink() : el("button", { type: "button", disabled: busy, onclick: () => test(s.name), text: busy ? "Testing…" : "Test connection" }),
+      editable ? el("button", { type: "button", onclick: () => openEdit(s.name), text: "Edit config" }) : null,
+      editable ? remove : null,
+    ));
+
+    if (account) {
+      const good = s.status === "ok" && !s.error;
+      wrap.append(el("div", { class: "status" + (good ? "" : " error") },
+        el("span", { class: "dot " + (good ? "ok" : s.status === "error" ? "error" : "untested") }),
+        el("span", { class: "msg", text: good
+          ? `Connected in your claude.ai account · ${s.tools.length} tools`
+          : s.error || "Not available." })));
+    } else if (busy) {
+      wrap.append(el("div", { class: "status" }, el("span", { class: "dot busy" }), el("span", { class: "msg", text: "Connecting and listing tools…" })));
+    } else if (s.status === "error") {
+      wrap.append(el("div", { class: "status error" }, el("span", { class: "dot error" }),
+        el("span", { class: "msg", text: s.error || "Couldn't connect." })));
+    } else if (s.status === "ok") {
+      wrap.append(el("div", { class: "status" }, el("span", { class: "dot ok" }),
+        el("span", { class: "msg", text: `Connected · ${s.tools.length} tools · tested ${ago(s.tested_at)}` })));
+    } else if (editable) {
+      wrap.append(el("div", { class: "status" }, el("span", { class: "dot untested" }),
+        el("span", { class: "msg", text: "Not tested yet. Test the connection to see its tools." })));
+    } else if (s.error) {
+      wrap.append(el("div", { class: "status error" }, el("span", { class: "dot" }), el("span", { class: "msg", text: s.error })));
+    }
+
+    if (s.enabled && s.live) {
+      const down = s.live.status === "failed" || s.live.status === "needs-auth";
+      wrap.append(el("div", { class: "live" + (down ? " down" : "") },
+        el("span", { class: "dot " + (down ? "error" : s.live.status === "connected" ? "ok" : "untested") }),
+        el("span", { text: down
+          ? `In Spark's session: unreachable${s.live.error ? ` (${s.live.error})` : ""}. Spark retries at the next conversation.`
+          : `In Spark's session: ${s.live.status}` })));
+    }
+
+    wrap.append(el("div", { class: "setting" },
+      el("div", { class: "what" },
+        el("b", { text: "Questions about this system" }),
+        el("span", { text: s.route === "deep"
+          ? "Go to the deep model, which hands the lookups to the researcher."
+          : "Are routed like any other request (Auto mode)." })),
+      canEdit
+        ? el("div", { class: "seg", role: "group", "aria-label": "Route" },
+            ...[["deep", "Deep"], ["auto", "Auto"]].map(([r, label]) => el("button", {
+              type: "button", "aria-pressed": s.route === r ? "true" : "false",
+              onclick: () => setRoute(s.name, r), text: label })))
+        : el("span", { class: "spark", text: s.route === "deep" ? "Deep (config.yaml)" : "Auto (config.yaml)" }),
+    ));
+
+    wrap.append(notesView(s));
+
+    if (!s.tools.length) {
+      if (editable && s.status === "ok") wrap.append(el("p", { class: "note", text: "This server offers no tools." }));
+      return wrap;
+    }
+
+    const filter = el("input", { class: "filter", type: "search", placeholder: "Filter tools", value: S.filter,
+      oninput: (e) => { S.filter = e.target.value; renderTools(); } });
+    wrap.append(el("div", { class: "tools-head" },
+      el("h3", {}, "Tools ", el("span", { class: "muted small", text: `${c.allow} allowed · ${c.ask} ask first · ${c.off} off` })),
+      el("div", { style: "display:flex; gap:8px; align-items:center" },
+        s.tools.length > 8 ? filter : null,
+        canEdit ? el("span", { class: "muted small", text: "All:" }) : null,
+        canEdit ? seg(null, (m) => setTool(s.name, null, m)) : null,
+      ),
+    ));
+    const box = el("div", { class: "tools" });
+    wrap.append(box);
+
+    function renderTools() {
+      const q = S.filter.trim().toLowerCase();
+      box.replaceChildren();
+      const shown = s.tools.filter((t) => !q || t.name.toLowerCase().includes(q) || (t.description || "").toLowerCase().includes(q));
+      if (!shown.length) box.append(el("div", { class: "tool" }, el("span", { class: "muted", text: "No tools match." })));
+      for (const t of shown) {
+        box.append(el("div", { class: "tool" },
+          el("div", {},
+            el("div", {}, el("span", { class: "tn", text: t.name }),
+              t.hint === "read" ? el("span", { class: "hint read", text: "read-only" }) : null,
+              t.hint === "destructive" ? el("span", { class: "hint destructive", text: "destructive" }) : null),
+            t.description ? el("div", { class: "td", text: t.description, title: t.description }) : null,
+          ),
+          seg(t.mode, canEdit ? (m) => setTool(s.name, t.name, m) : null),
+        ));
+      }
+    }
+    renderTools();
+
+    wrap.append(el("div", { class: "legend" },
+      el("span", {}, el("b", { text: "Allow" }), " runs without asking"),
+      el("span", {}, el("b", { text: "Ask" }), " Spark asks you to say yes first"),
+      el("span", {}, el("b", { text: "Off" }), " hidden from Claude"),
+    ));
+    if (account) wrap.append(el("p", { class: "note", text: s.enabled
+      ? "Your choices here override the defaults in config.yaml. Connect, sign in or disconnect it on claude.ai."
+      : "Turn it on (top right) for Spark to use these tools. claude.ai connectors that are off stay hidden from Spark." }));
+    else if (!editable) wrap.append(el("p", { class: "note", text: "This server is set up in config.yaml and mcp_servers.json; change its tools there." }));
+    else if (!s.enabled) wrap.append(el("p", { class: "note", text: "Turn the server on (top right) for Spark to use these tools." }));
+    return wrap;
+  }
+
+  function notesView(s) {
+    const box = el("div");
+    const loaded = S.notes[s.name];
+    if (!loaded) loadNotes(s.name);
+    if (loaded && loaded.enabled === false) return box;
+    const count = s.notes || 0;
+    box.append(el("div", { class: "notes-head" },
+      el("h3", {}, "What Spark knows ", el("span", { class: "muted small",
+        text: count ? `${count} note${count === 1 ? "" : "s"}` : "nothing yet" })),
+      loaded ? el("span", { class: "muted small mono", text: loaded.path }) : null));
+    const ta = el("textarea", { class: "notes", spellcheck: "false",
+      placeholder: loaded ? "Spark adds notes here after it explores this system: where data lives, queries that worked. You can write your own too, one per line starting with \"- \"." : "Loading…",
+      oninput: (e) => { S.noteDrafts[s.name] = e.target.value; } });
+    ta.value = S.noteDrafts[s.name] ?? loaded?.text ?? "";
+    box.append(ta, el("div", { class: "notes-actions" },
+      el("button", { type: "button", disabled: !loaded, onclick: () => saveNotes(s.name), text: "Save notes" }),
+      S.notesSaved === s.name ? el("span", { class: "saved", text: "Saved. Spark uses them from its next conversation." }) : null));
+    return box;
+  }
+
+  function seg(mode, onpick) {
+    const labels = { allow: "Allow", ask: "Ask", off: "Off" };
+    return el("div", { class: "seg", role: "group" },
+      ...Object.entries(labels).map(([m, label]) => el("button", {
+        type: "button", "data-mode": m, "aria-pressed": mode === m ? "true" : "false",
+        disabled: !onpick, onclick: () => onpick && onpick(m), text: label,
+      })),
+    );
+  }
+
+  const EXAMPLE = `{
+  "mcpServers": {
+    "my-server": {
+      "type": "http",
+      "url": "https://example.com/mcp",
+      "headers": { "Authorization": "Bearer YOUR_TOKEN" }
+    },
+    "local-tool": {
+      "command": "npx",
+      "args": ["-y", "@some/mcp-server"],
+      "env": { "API_KEY": "..." }
+    }
+  }
+}`;
+
+  function addView() {
+    const ta = el("textarea", { spellcheck: "false", placeholder: EXAMPLE,
+      oninput: (e) => { S.draft = e.target.value; } });
+    ta.value = S.draft;
+    const go = el("button", { class: "primary", type: "button", text: "Add and test" });
+    go.addEventListener("click", () => submitAdd(ta.value, go));
+    const wrap = el("div", {},
+      el("h2", { text: "Add connectors" }),
+      el("p", { class: "help" },
+        "Paste one or more MCP servers: a whole ", el("code", { text: "claude_desktop_config.json" }),
+        ", its ", el("code", { text: "mcpServers" }), " block, or a single server. Tokens and keys are moved to ",
+        el("code", { text: ".env" }), " and only a placeholder is kept. New servers start switched off."),
+      ta,
+      el("div", { class: "actions" },
+        go,
+        S.claudeDesktop ? el("button", { type: "button", onclick: importDesktop, text: "Import from Claude Desktop" }) : null,
+        el("button", { type: "button", onclick: () => { S.view = S.sel ? "server" : "welcome"; render(); }, text: "Cancel" }),
+      ),
+    );
+    if (S.addError) wrap.append(el("div", { class: "err", text: S.addError }));
+    if (S.addResults) wrap.append(resultsView(S.addResults));
+    if (!S.addResults && !S.addError) setTimeout(() => ta.focus(), 0);
+    return wrap;
+  }
+
+  function resultsView(r) {
+    const box = el("div", { class: "results" });
+    for (const name of r.added) {
+      const s = byName(name);
+      const state = S.busy.has(name) ? "testing…" : s?.status === "ok" ? `${s.tools.length} tools found` : s?.status === "error" ? "couldn't connect" : "";
+      box.append(el("div", { class: "result" },
+        el("div", {}, el("b", { text: name }), " ", el("span", { class: "muted small", text: state })),
+        (r.notes[name] || []).length ? el("ul", {}, ...(r.notes[name].map((n) => el("li", { text: n })))) : null,
+      ));
+    }
+    for (const [name, why] of Object.entries(r.skipped || {}))
+      box.append(el("div", { class: "result muted" }, el("b", { text: name }), ` skipped: ${why}`));
+    if ((r.env_vars || []).length)
+      box.append(el("div", { class: "muted small", text: `Saved to .env: ${r.env_vars.join(", ")}` }));
+    return box;
+  }
+
+  async function submitAdd(text, btn) {
+    btn.disabled = true; S.addError = ""; S.addResults = null;
+    const r = await api().add(text);
+    btn.disabled = false;
+    if (!r.ok) { S.addError = r.error; render(); return; }
+    await afterAdd(r);
+    S.draft = "";
+  }
+
+  async function importDesktop() {
+    S.view = "add"; S.addError = ""; S.addResults = null; render();
+    const r = await api().import_claude_desktop();
+    if (!r.ok) { S.addError = r.error; render(); return; }
+    await afterAdd(r);
+  }
+
+  async function afterAdd(r) {
+    S.addResults = r;
+    await refresh();
+    if (r.added.length) S.sel = r.added[0];
+    S.view = "add"; render();
+    await testMany(r.added);
+    if (r.added.length === 1) { S.view = "server"; render(); }
+  }
+
+  function openAdd() { S.view = "add"; S.addError = ""; S.addResults = null; render(); }
+
+  async function openEdit(name) {
+    const r = await api().get_config(name);
+    if (!r.ok) return;
+    S.view = "edit"; S.sel = name; S.editText = r.text; S.editError = ""; render();
+  }
+
+  function editView() {
+    const ta = el("textarea", { spellcheck: "false" });
+    ta.value = S.editText;
+    const save = el("button", { class: "primary", type: "button", text: "Save and test" });
+    save.addEventListener("click", async () => {
+      save.disabled = true;
+      const r = await api().update_config(S.sel, ta.value);
+      save.disabled = false;
+      if (!r.ok) { S.editText = ta.value; S.editError = r.error; render(); return; }
+      S.view = "server"; markDirty(); await refresh(); await test(S.sel);
+    });
+    const wrap = el("div", {},
+      el("h2", { text: `Edit ${S.sel}` }),
+      el("p", { class: "help" }, "Secrets show as ", el("code", { text: "${VAR}" }),
+        " placeholders; their values are in ", el("code", { text: ".env" }),
+        ". Paste a new token in place of a placeholder and it's moved to .env when you save."),
+      ta,
+      el("div", { class: "actions" }, save,
+        el("button", { type: "button", onclick: () => { S.view = "server"; render(); }, text: "Cancel" })),
+    );
+    if (S.editError) wrap.append(el("div", { class: "err", text: S.editError }));
+    return wrap;
+  }
+
+  $("addBtn").addEventListener("click", openAdd);
+  $("applyBtn").addEventListener("click", async () => {
+    $("applyBtn").disabled = true;
+    try { await api().apply(); S.dirty = false; renderBanner(); }
+    finally { $("applyBtn").disabled = false; }
+  });
+
+  window.addEventListener("pywebviewready", async () => {
+    await refresh();
+    if (S.servers.length) { S.sel = S.servers[0].name; S.view = "server"; render(); }
+  });
+  render();
+})();
+</script>
+</body>
+</html>

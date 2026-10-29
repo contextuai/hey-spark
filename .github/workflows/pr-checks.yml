@@ -1,0 +1,71 @@
+name: PR checks
+
+# The quality gate from CLAUDE.md, on every pull request and every push to main:
+# ruff lint, ruff format check, the offline test suite, and the --text smoke run
+# against the mock brain (no API keys, no audio hardware, no model downloads).
+#
+# macOS and Windows are the shipped platforms; Ubuntu keeps the code honest about portability.
+# Tests that need model files skip themselves; tests that need network or keys are
+# marked `live` and excluded by the pytest addopts in pyproject.toml.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Cancel superseded runs on the same PR; never cancel a run on main mid-flight.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  checks:
+    name: Quality gate (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    env:
+      PYTHONUTF8: "1"
+      PYTHONIOENCODING: utf-8
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # setup-uv stopped publishing floating major tags after v7, so pin the release
+      # commit; Dependabot (github-actions ecosystem) keeps the SHA and comment current.
+      - name: Set up uv and Python 3.11
+        uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          python-version: "3.11"
+          enable-cache: true
+
+      # --locked fails if uv.lock is out of date with pyproject.toml (stricter than
+      # --frozen, which would silently install a stale lock). All extras, because a
+      # plain `uv sync` removes them and some tests exercise the optional backends.
+      - name: Install dependencies
+        run: uv sync --all-extras --locked
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format
+        run: uv run ruff format --check .
+
+      - name: Tests (offline)
+        run: uv run pytest -q
+
+      - name: Smoke run (--text with the mock brain)
+        run: |
+          set -o pipefail
+          echo "what is two plus two" | uv run spark --brain mock --text | tee smoke.txt
+          grep -qi "four" smoke.txt

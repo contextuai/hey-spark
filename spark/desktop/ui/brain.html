@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brain</title>
+<style>
+  :root {
+    --bg: #F6F7F9;
+    --surface: #FFFFFF;
+    --sunken: #EEF0F3;
+    --line: #E3E6EB;
+    --text: #15181E;
+    --muted: #677080;
+    --accent: #E63900;
+    --accent-soft: #FF47001F;
+    --ok: #10B981;
+    --warn: #D97706;
+    --warn-soft: #F59E0B1F;
+    --err: #EF4444;
+    --btn: #15181E;
+    --btn-text: #FFFFFF;
+    --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318;
+      --surface: #1A1D24;
+      --sunken: #15181E;
+      --line: #2A2F39;
+      --text: #ECEEF2;
+      --muted: #9199A8;
+      --warn: #F59E0B;
+      --btn: #ECEEF2;
+      --btn-text: #111318;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13.5px/1.45 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    display: grid; grid-template-columns: 250px 1fr; overflow: hidden;
+  }
+  button {
+    appearance: none; font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); padding: 6px 12px; font-weight: 500;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--btn); color: var(--btn-text); border-color: var(--btn); }
+  button.danger { color: var(--err); }
+  button.link {
+    border: 0; background: transparent; padding: 0; color: var(--accent); text-decoration: underline;
+    text-underline-offset: 3px; font-weight: 500;
+  }
+  input, select {
+    font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--line);
+    border-radius: 8px; padding: 6px 10px; min-width: 0;
+  }
+  input { width: 100%; }
+  input[readonly] { background: var(--sunken); color: var(--muted); }
+
+  /* --- sidebar ------------------------------------------------------------------------------ */
+  aside { border-right: 1px solid var(--line); background: var(--sunken); display: flex; flex-direction: column; min-height: 0; }
+  .side-head { padding: 16px 14px 6px; }
+  .side-head h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .side-head p { margin: 2px 0 0; color: var(--muted); font-size: 12px; }
+  .list { overflow-y: auto; padding: 6px 8px 12px; flex: 1; }
+  .group { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding: 10px 8px 4px; }
+  .item {
+    display: grid; grid-template-columns: 16px 1fr auto; gap: 8px; align-items: center; width: 100%; text-align: left;
+    padding: 8px; border-radius: 8px; border: 1px solid transparent; background: transparent; font-weight: 400;
+  }
+  .item:hover { background: var(--surface); }
+  .item.sel { background: var(--surface); border-color: var(--line); }
+  .radio { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--muted); display: grid; place-items: center; }
+  .item.sel .radio { border-color: var(--accent); }
+  .item.sel .radio::after { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+  .item .nm { font-weight: 500; }
+  .inuse { font-size: 10.5px; color: var(--ok); font-weight: 600; }
+
+  /* --- main --------------------------------------------------------------------------------- */
+  main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .pane { flex: 1; overflow-y: auto; padding: 20px 24px 24px; min-height: 0; }
+  h2 { font-size: 18px; margin: 0; font-weight: 600; display: flex; gap: 10px; align-items: center; }
+  .spark { font-size: 11px; border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; color: var(--muted); font-weight: 500; }
+  .spark.ok { color: var(--ok); border-color: currentColor; }
+  .desc { color: var(--muted); margin: 4px 0 14px; max-width: 640px; }
+  .box { border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+  .box.warn { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 40%, var(--line)); }
+  .box.warn b { color: var(--warn); }
+  h3 { font-size: 13.5px; margin: 18px 0 8px; font-weight: 600; }
+  .row { display: grid; grid-template-columns: 130px 1fr; gap: 6px 12px; align-items: center; margin-bottom: 8px; max-width: 680px; }
+  .row label { color: var(--muted); }
+  .row .help { grid-column: 2; color: var(--muted); font-size: 12px; margin-top: -4px; }
+  .pick { display: grid; grid-template-columns: 1fr; gap: 6px; }
+  .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .muted { color: var(--muted); }
+  .small { font-size: 12px; }
+  .mono { font-family: var(--mono); font-size: 12px; }
+  .steps { list-style: none; padding: 0; margin: 10px 0 0; display: grid; gap: 6px; max-width: 680px; }
+  .steps li { display: grid; grid-template-columns: 18px 1fr; gap: 6px; user-select: text; }
+  .steps .i { font-weight: 700; text-align: center; }
+  .steps .ok .i { color: var(--ok); } .steps .warn .i { color: var(--warn); } .steps .error .i { color: var(--err); }
+  .models-list { margin: 6px 0 0; padding-left: 18px; }
+  .rec { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+  .rec:first-of-type { border-top: 0; }
+  .rec .note { color: var(--muted); font-size: 12px; }
+  .rec .low { color: var(--warn); font-size: 12px; }
+  .bar { height: 8px; border-radius: 999px; background: var(--sunken); overflow: hidden; border: 1px solid var(--line); margin: 8px 0 4px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+  code { font-family: var(--mono); font-size: 12px; background: var(--sunken); border-radius: 4px; padding: 1px 5px; }
+
+  footer {
+    border-top: 1px solid var(--line); padding: 10px 24px; display: flex; gap: 12px; align-items: center;
+    justify-content: space-between; background: var(--surface); min-height: 56px;
+  }
+  .msg { flex: 1; min-width: 0; overflow-wrap: anywhere; user-select: text; }
+  .msg.ok { color: var(--ok); } .msg.error { color: var(--err); } .msg.warn { color: var(--warn); }
+</style>
+</head>
+<body>
+  <aside>
+    <div class="side-head"><h1>Brain</h1><p>What thinks for Spark</p></div>
+    <div class="list" id="list"></div>
+  </aside>
+  <main>
+    <div class="pane" id="pane"><p class="muted">Loading…</p></div>
+    <footer>
+      <div class="msg" id="msg" role="status" aria-live="polite"></div>
+      <div class="actions" id="footActions"></div>
+    </footer>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const OTHER = "__other__";
+  const S = {
+    state: null, sel: null, form: {}, keyEdit: false, tested: null, models: {},
+    claude: null, ollama: null, pull: null, pullTimer: null, confirm: false, busy: false,
+    msg: "", msgLevel: "", canRevert: false, other: {},
+  };
+
+  // Build DOM safely: every text goes through textContent.
+  function h(tag, attrs, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === null || v === undefined || v === false) continue;
+      if (k === "class") el.className = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else if (k === "value") el.value = v;
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat()) {
+      if (kid === null || kid === undefined || kid === false) continue;
+      el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    }
+    return el;
+  }
+
+  const api = () => window.pywebview.api;
+  const prov = (id) => S.state.providers.find((p) => p.id === (id || S.sel));
+  const isClaude = () => S.sel === "claude";
+
+  function say(text, level) { S.msg = text || ""; S.msgLevel = level || ""; renderFooter(); }
+
+  // --- selection and form -----------------------------------------------------------------------
+  function select(id) {
+    if (S.busy) return;
+    S.sel = id; S.confirm = false; S.other = {};
+    const p = prov(id);
+    if (id === "claude") {
+      const c = S.state.claude;
+      S.form = { provider: "claude", fast_model: c.fast_model, deep_model: c.deep_model, worker_model: c.worker_model || "", key: "" };
+      S.keyEdit = !p.key.saved;
+      if (!S.claude) loadClaude();
+    } else {
+      const v = p.values;
+      S.form = {
+        provider: id,
+        base_url: v.base_url || p.default_base_url || "",
+        api_version: v.api_version || "",
+        fast_model: v.fast_model || p.suggested.fast_model || "",
+        deep_model: v.deep_model || p.suggested.deep_model || "",
+        worker_model: v.worker_model || "",
+        key: "",
+      };
+      S.keyEdit = p.takes_key && !p.key.saved && p.needs_key;
+      if (id === "ollama") loadOllama();
+    }
+    say("");
+    render();
+  }
+
+  const sig = () => JSON.stringify(S.form);
+  const testedOk = () => S.tested && S.tested.sig === sig() && S.tested.ok;
+
+  function setField(name, value) {
+    S.form[name] = value;
+    S.confirm = false;
+    renderFooter();
+  }
+
+  function payload() { return { ...S.form }; }
+
+  // --- loading ------------------------------------------------------------------------------------
+  async function load(keepSel) {
+    S.state = await api().state();
+    S.canRevert = S.state.can_revert;
+    select(keepSel && prov(keepSel) ? keepSel : S.state.active);
+  }
+
+  async function loadClaude() {
+    S.claude = { loading: true };
+    render();
+    S.claude = await api().claude_status();
+    if (isClaude()) render();
+  }
+
+  async function loadOllama() {
+    S.ollama = null;
+    if (S.sel === "ollama") render();
+    S.ollama = await api().ollama_status(S.form.base_url || "");
+    if (S.sel !== "ollama") return;
+    // The chosen model isn't downloaded (e.g. the suggested default): start from one that is,
+    // preferring models that run on this computer over Ollama's "-cloud" ones.
+    const installed = ollamaInstalled();
+    const pick = installed.find((m) => !m.endsWith("-cloud")) || installed[0];
+    for (const k of ["deep_model", "fast_model"]) {
+      if (pick && !installed.includes(S.form[k])) S.form[k] = pick;
+    }
+    render();
+  }
+
+  // Names of the models downloaded in Ollama, from its status (no Test connection needed).
+  function useOllamaModel(name) {
+    for (const k of ["deep_model", "fast_model"]) S.form[k] = name;
+    S.form.worker_model = ""; S.other = {};
+    say(`Using ${name}. Now press Test connection.`, "ok");
+    render();
+  }
+
+  function ollamaInstalled() {
+    return S.ollama && S.ollama.running ? (S.ollama.models || []).map((m) => m.name) : [];
+  }
+
+  // --- actions --------------------------------------------------------------------------------------
+  async function test() {
+    if (S.busy) return;
+    S.busy = true; S.tested = null;
+    say(`Testing ${prov().label}… this takes a few seconds.`);
+    render();
+    const at = sig();
+    try {
+      const r = await api().test(payload());
+      S.tested = { sig: at, ok: r.ok, steps: r.steps, tools: r.tools };
+      if (r.models && r.models.length) S.models[S.sel] = r.models;
+      say(r.ok ? (r.tools === "no" ? "Connected, but see the warning about tools." : "Test passed.") : "The test didn't pass. See the details above.",
+          r.ok ? (r.tools === "no" ? "warn" : "ok") : "error");
+    } catch (e) {
+      say(`The test failed: ${e}`, "error");
+    } finally {
+      S.busy = false; render();
+    }
+  }
+
+  async function save(force) {
+    if (S.busy) return;
+    if (!testedOk() && !force) { S.confirm = true; renderFooter(); return; }
+    S.confirm = false; S.busy = true;
+    say("Applying… Spark is switching its brain.");
+    render();
+    const sel = S.sel;
+    try {
+      const r = await api().save(payload());
+      if (r.state) S.state = r.state;
+      if (r.ok) {
+        S.canRevert = S.state.can_revert;
+        S.form.key = ""; S.keyEdit = false;
+        S.tested = S.tested ? { ...S.tested, sig: sig() } : null;
+        say(r.message, "ok");
+      } else {
+        S.canRevert = !!(r.state && r.state.can_revert);
+        say(r.error, "error");
+      }
+    } catch (e) {
+      say(`Saving failed: ${e}`, "error");
+    } finally {
+      S.busy = false; S.sel = sel; render();
+    }
+  }
+
+  async function useClaude() {
+    if (S.busy) return;
+    S.busy = true; say("Switching back to Claude…"); render();
+    try {
+      const r = await api().use_claude();
+      if (r.state) S.state = r.state;
+      S.canRevert = !!(S.state && S.state.can_revert);
+      if (r.ok) { S.busy = false; select("claude"); say(r.message, "ok"); return; }
+      say(r.error, "error");
+    } finally { S.busy = false; render(); }
+  }
+
+  async function revert() {
+    if (S.busy) return;
+    S.busy = true; say("Going back to the previous settings…"); render();
+    try {
+      const r = await api().revert();
+      if (r.state) S.state = r.state;
+      S.canRevert = !!(S.state && S.state.can_revert);
+      if (r.ok) { S.busy = false; select(S.state.active); say(r.message, "ok"); return; }
+      say(r.error, "error");
+    } finally { S.busy = false; render(); }
+  }
+
+  async function removeKey() {
+    const r = await api().remove_key(S.sel);
+    const p = prov();
+    if (r.key) p.key = r.key;
+    S.keyEdit = !p.key.saved;
+    say(r.ok ? "The key was removed." : r.error, r.ok ? "ok" : "error");
+    render();
+  }
+
+  async function pull(model) {
+    const r = await api().ollama_pull(model, S.form.base_url || "");
+    if (!r.ok) { say(r.error, "error"); return; }
+    S.pull = r.progress;
+    render();
+    clearInterval(S.pullTimer);
+    S.pullTimer = setInterval(async () => {
+      S.pull = await api().ollama_progress();
+      if (S.pull.state !== "running") {
+        clearInterval(S.pullTimer); S.pullTimer = null;
+        if (S.pull.state === "done") {
+          say(`Downloaded ${S.pull.model}. Now press Test connection.`, "ok");
+          for (const k of ["fast_model", "deep_model"]) S.form[k] = S.pull.model;
+          S.form.worker_model = "";
+          await loadOllama();
+        } else if (S.pull.state === "error") {
+          say(S.pull.error, "error");
+        } else {
+          say("Download cancelled. Ollama keeps what it got and continues next time.", "warn");
+        }
+      }
+      if (S.sel === "ollama") render();
+    }, 500);
+  }
+
+  // --- rendering ----------------------------------------------------------------------------------
+  function render() {
+    if (!S.state) return;
+    renderList();
+    const pane = $("pane");
+    pane.textContent = "";
+    pane.append(isClaude() ? claudePane() : providerPane());
+    renderFooter();
+  }
+
+  function renderList() {
+    const list = $("list");
+    list.textContent = "";
+    const groups = [[["claude", "agent"], "Recommended"], [["cloud"], "Cloud (needs a key)"], ["local", "On this computer"], ["custom", "Other"]];
+    for (const [kinds, title] of groups) {
+      const items = S.state.providers.filter((p) => kinds.includes(p.kind));
+      if (!items.length) continue;
+      list.append(h("div", { class: "group" }, title));
+      for (const p of items) {
+        list.append(h("button", {
+          type: "button", class: "item" + (p.id === S.sel ? " sel" : ""), "aria-pressed": String(p.id === S.sel),
+          disabled: S.busy, onclick: () => select(p.id),
+        }, h("span", { class: "radio" }), h("span", { class: "nm" }, p.label),
+           p.id === S.state.active ? h("span", { class: "inuse" }, "In use") : ""));
+      }
+    }
+  }
+
+  function header(p) {
+    return [
+      h("h2", {}, p.label, p.id === S.state.active ? h("span", { class: "spark ok" }, "In use") : ""),
+      h("p", { class: "desc" }, p.description),
+    ];
+  }
+
+  function pickerRow(label, field, choices, opts) {
+    // choices: [[value, label], ...]. "Other…" lets the user type a name not on the list.
+    const value = S.form[field] || "";
+    const known = choices.some(([v]) => v === value);
+    const other = S.other[field] || (!known && value !== "" && choices.length > 0);
+    const row = h("div", { class: "row" });
+    row.append(h("label", { for: "f_" + field }, label));
+    const box = h("div", { class: "pick" });
+    if (choices.length) {
+      const sel = h("select", { id: "f_" + field, disabled: S.busy, onchange: (e) => {
+        if (e.target.value === OTHER) { S.other[field] = true; render(); return; }
+        S.other[field] = false; setField(field, e.target.value); render();
+      } });
+      for (const [v, l] of choices) sel.append(h("option", { value: v }, l));
+      sel.append(h("option", { value: OTHER }, "Other (type a name)…"));
+      sel.value = other ? OTHER : value;
+      box.append(sel);
+    }
+    if (other || !choices.length) {
+      box.append(h("input", { type: "text", value, spellcheck: "false", placeholder: (opts && opts.placeholder) || "model name",
+        "aria-label": label, disabled: S.busy, oninput: (e) => setField(field, e.target.value.trim()) }));
+    }
+    row.append(box);
+    if (opts && opts.help) row.append(h("div", { class: "help" }, opts.help));
+    return row;
+  }
+
+  function claudePane() {
+    const p = prov("claude");
+    const c = S.state.claude;
+    const frag = h("div", {}, ...header(p));
+    if (p.link) {
+      frag.append(h("p", {}, h("button", { type: "button", class: "link", onclick: () => api().open_link(p.link) }, p.link_label + " ↗")));
+    }
+    // Claude Code: the CLI the Claude brain runs. The app doesn't ship it; the user installs it.
+    const cli = h("div", { class: "box" });
+    if (!S.claude || S.claude.loading) {
+      cli.append(h("span", { class: "muted" }, "Looking for Claude Code…"));
+    } else if (S.claude.installed) {
+      cli.append(h("div", {}, h("b", {}, "Claude Code: "), "installed."));
+      cli.append(h("div", { class: S.claude.signed_in ? "" : "muted" }, S.claude.sign_in || ""));
+      if (!S.claude.signed_in) {
+        cli.append(h("div", { class: "actions" },
+          h("button", { type: "button", onclick: () => { S.claude = null; loadClaude(); } }, "Check again")));
+      }
+    } else {
+      cli.append(h("div", {}, S.claude.message || "Claude Code isn't installed."));
+      cli.append(h("div", { class: "actions" },
+        h("button", { type: "button", class: "primary", onclick: () => api().open_link(p.install_link) }, "Install Claude Code ↗"),
+        h("button", { type: "button", onclick: () => { S.claude = null; loadClaude(); } }, "Check again")));
+    }
+    frag.append(cli);
+    frag.append(...keySection(p));
+    frag.append(...testSection("Checks that Claude Code is installed, and that it's signed in or Anthropic accepts the key."));
+    frag.append(h("h3", {}, "Models"));
+    const choices = c.choices;
+    frag.append(pickerRow("Voice (deep)", "deep_model", choices, { help: "Answers you and does the bigger jobs." }));
+    frag.append(pickerRow("Fast", "fast_model", choices, { help: "Quick questions in Auto mode." }));
+    const fastLabel = (choices.find(([v]) => v === S.form.fast_model) || [, S.form.fast_model])[1];
+    frag.append(pickerRow("Researcher", "worker_model", [["", `Same as Fast (${fastLabel})`], ...choices],
+      { help: "Looks things up in your connectors for the voice model." }));
+    return frag;
+  }
+
+  function keySection(p) {
+    if (!p.takes_key) return [];
+    const k = p.key;
+    const row = h("div", { class: "row" }, h("label", { for: "f_key" }, "Key"));
+    if (k.saved && !S.keyEdit) {
+      const where = k.where === "environment" ? "set in your environment variables" : "saved";
+      row.append(h("div", { class: "actions" },
+        h("span", {}, `A key is ${where}` + (k.last4 ? `, ending in …${k.last4}` : "") + "."),
+        h("button", { type: "button", disabled: S.busy, onclick: () => { S.keyEdit = true; render(); } }, "Replace key"),
+        k.where === ".env" ? h("button", { type: "button", class: "danger", disabled: S.busy, onclick: removeKey }, "Remove key") : ""));
+    } else {
+      row.append(h("input", { id: "f_key", type: "password", autocomplete: "off", spellcheck: "false", value: S.form.key, disabled: S.busy,
+        placeholder: p.needs_key ? "paste your API key" : "only if your server needs one",
+        oninput: (e) => setField("key", e.target.value.trim()) }));
+      row.append(h("div", { class: "help" }, `Stored only in the .env file next to Spark's settings (as ${k.env}), never shown again.`));
+      if (k.saved) row.append(h("div", { class: "help" }, h("button", { type: "button", class: "link", onclick: () => { S.keyEdit = false; S.form.key = ""; render(); } }, "Keep the saved key")));
+    }
+    const title = p.id === "claude" ? "API key (optional)" : "API key";
+    const note = p.id === "claude" && !(k.saved && !S.keyEdit)
+      ? [h("p", { class: "help" }, "Leave this empty to use the Claude account Claude Code is signed in with. A key switches Claude to pay-per-use billing.")]
+      : [];
+    return [h("h3", {}, title), ...note, row];
+  }
+
+  function testSection(what) {
+    const out = [h("h3", {}, "Check it works"), h("div", { class: "actions" },
+      h("button", { type: "button", disabled: S.busy, onclick: test }, S.busy && !S.tested ? "Testing…" : "Test connection"),
+      h("span", { class: "muted small" }, what))];
+    if (S.tested && S.tested.steps) {
+      const ul = h("ul", { class: "steps" });
+      const stale = S.tested.sig !== sig();
+      for (const s of S.tested.steps) {
+        ul.append(h("li", { class: s.level }, h("span", { class: "i" }, s.level === "ok" ? "✓" : s.level === "warn" ? "!" : "✕"), h("span", {}, s.text)));
+      }
+      if (stale) ul.append(h("li", { class: "warn" }, h("span", { class: "i" }, "!"), h("span", {}, "You changed something since this test. Test again before saving.")));
+      out.push(ul);
+    }
+    return out;
+  }
+
+  function modelChoices(p) {
+    const ids = new Set([...(S.models[p.id] || []), ...(p.id === "ollama" ? ollamaInstalled() : [])]);
+    for (const m of [p.suggested.fast_model, p.suggested.deep_model, p.values.fast_model, p.values.deep_model,
+                     p.values.worker_model, S.form.fast_model, S.form.deep_model]) if (m) ids.add(m);
+    return [...ids].sort((a, b) => a.localeCompare(b)).map((m) => [m, m]);
+  }
+
+  function providerPane() {
+    const p = prov();
+    const frag = h("div", {}, ...header(p));
+    const conns = S.state.account_connectors || [];
+    if (conns.length) {
+      frag.append(h("div", { class: "box warn" }, h("b", {}, "Note: "),
+        `claude.ai connectors (${conns.join(", ")}) don't work with ${p.label}. ` +
+        "Spark still uses the connectors you added in the Connectors window."));
+    }
+    if (p.link) {
+      frag.append(h("p", {}, h("button", { type: "button", class: "link", onclick: () => api().open_link(p.link) }, p.link_label + " ↗")));
+    }
+
+    // Address
+    frag.append(h("h3", {}, "Address"));
+    const urlRow = h("div", { class: "row" }, h("label", { for: "f_url" }, "Base URL"));
+    urlRow.append(h("input", {
+      id: "f_url", type: "text", spellcheck: "false", value: S.form.base_url, readonly: !p.url_editable, disabled: S.busy,
+      placeholder: p.id === "azure" ? "https://<resource>.openai.azure.com/openai/v1" : (p.default_base_url || "https://…/v1"),
+      oninput: (e) => setField("base_url", e.target.value.trim()),
+      onchange: () => { if (p.id === "ollama") loadOllama(); },
+    }));
+    if (p.id === "azure") urlRow.append(h("div", { class: "help" }, "From the Azure portal: your resource's Endpoint, then /openai/v1. The model names below are your deployment names."));
+    else if (p.id === "hermes") urlRow.append(h("div", { class: "help" }, `${p.default_base_url} when Hermes runs on this computer. ` +
+      "On a server, use its address, e.g. https://hermes.example.com/v1, and set API_SERVER_HOST=0.0.0.0 there. Use https or a private network: the key travels with every request."));
+    else if (p.url_editable && p.default_base_url) urlRow.append(h("div", { class: "help" }, `Usually ${p.default_base_url}`));
+    frag.append(urlRow);
+    if (p.id === "azure") {
+      const v = h("div", { class: "row" }, h("label", { for: "f_ver" }, "API version"));
+      v.append(h("input", { id: "f_ver", type: "text", value: S.form.api_version, placeholder: "leave empty for …/openai/v1", disabled: S.busy,
+        oninput: (e) => setField("api_version", e.target.value.trim()) }));
+      v.append(h("div", { class: "help" }, "Only for older …/openai/deployments/{model} addresses, e.g. 2024-10-21."));
+      frag.append(v);
+    }
+
+    frag.append(...keySection(p));
+
+    if (p.id === "ollama") frag.append(ollamaBox());
+
+    frag.append(...testSection(p.id === "hermes"
+      ? "Connects to Hermes's API server, checks the key, and lists its models."
+      : "Connects, checks the key, lists the models, and asks the voice model to use a tool."));
+
+    // Models
+    frag.append(h("h3", {}, "Models"));
+    const choices = modelChoices(p);
+    const name = p.id === "azure" ? "deployment name" : "model name";
+    if (!(S.models[p.id] || []).length && !(p.id === "ollama" && ollamaInstalled().length)) {
+      frag.append(h("p", { class: "muted small" }, "Press Test connection to fill these lists from " + p.label + ", or type the names."));
+    }
+    frag.append(pickerRow("Voice (deep)", "deep_model", choices, { placeholder: name, help: "Answers you and does the bigger jobs. Needs good tool use." }));
+    frag.append(pickerRow("Fast", "fast_model", choices, { placeholder: name, help: "Quick questions in Auto mode." }));
+    const fast = S.form.fast_model || "the fast model";
+    frag.append(pickerRow("Researcher", "worker_model", [["", `Same as Fast (${fast})`], ...choices], { placeholder: name, help: "Looks things up in your connectors for the voice model." }));
+    return frag;
+  }
+
+  function ollamaBox() {
+    const box = h("div", { class: "box" });
+    const o = S.ollama;
+    box.append(h("b", {}, "Ollama on this computer"));
+    if (!o) { box.append(h("div", { class: "muted" }, "Checking…")); return box; }
+    const again = h("button", { type: "button", onclick: loadOllama }, "Check again");
+    if (!o.installed) {
+      box.append(h("p", {}, "Ollama isn't installed yet. Download and install it, start it, then come back."));
+      box.append(h("div", { class: "actions" }, h("button", { type: "button", class: "primary", onclick: () => api().open_link(o.download_url) }, "Download Ollama ↗"), again));
+      return box;
+    }
+    if (!o.running) {
+      box.append(h("p", {}, "Ollama is installed but not running. Start it (Windows: from the Start menu; macOS: from Applications; it sits in the tray or menu bar), then check again."));
+      box.append(h("div", { class: "actions" }, again));
+      return box;
+    }
+    if (o.models.length) {
+      box.append(h("p", { class: "small" }, `Running, with ${o.models.length} model${o.models.length > 1 ? "s" : ""}:`));
+      // A "Use" button per model: picking works even where a <select> popup misbehaves (macOS).
+      box.append(h("ul", { class: "models-list small" }, o.models.map((m) => h("li", {}, m.name,
+        m.size_gb ? h("span", { class: "muted" }, ` · ${m.size_gb} GB`) : "", " ",
+        S.form.deep_model === m.name
+          ? h("span", { class: "spark ok" }, "Selected")
+          : h("button", { type: "button", class: "link", disabled: S.busy, onclick: () => useOllamaModel(m.name) }, "Use")))));
+    } else {
+      box.append(h("p", {}, "Ollama is running but has no models yet. Pick one to download (it can take a while):"));
+    }
+    const free = o.disk.free_gb;
+    box.append(h("p", { class: "small muted" }, free != null ? `Free space where Ollama keeps models: ${free} GB (${o.disk.path})` : `Models are kept in ${o.disk.path}`));
+    const pulling = S.pull && S.pull.state === "running";
+    if (S.pull && (pulling || S.pull.state === "error")) {
+      const pct = S.pull.percent || 0;
+      box.append(h("div", {}, h("span", {}, `${S.pull.model}: ${S.pull.status}`),
+        S.pull.total_gb ? h("span", { class: "muted small" }, ` · ${S.pull.completed_gb} of ${S.pull.total_gb} GB (${pct}%)`) : ""));
+      const bar = h("div", { class: "bar" }, h("i", {}));
+      bar.firstChild.style.width = `${pct}%`;
+      box.append(bar);
+      if (pulling) box.append(h("button", { type: "button", onclick: () => api().ollama_cancel() }, "Cancel download"));
+    }
+    for (const m of o.recommended) {
+      box.append(h("div", { class: "rec" },
+        h("div", {}, h("div", {}, h("b", {}, m.label), h("span", { class: "muted" }, ` · ${m.name} · about ${m.size_gb} GB`)),
+          h("div", { class: "note" }, m.note),
+          m.low_space && !m.installed ? h("div", { class: "low" }, `Low on space: keep at least ${(m.size_gb * 2).toFixed(1)} GB free for this one.`) : ""),
+        m.installed ? h("span", { class: "spark ok" }, "Installed")
+          : h("button", { type: "button", disabled: pulling || S.busy, onclick: () => pull(m.name) }, "Download")));
+    }
+    return box;
+  }
+
+  function renderFooter() {
+    const msg = $("msg");
+    msg.textContent = S.msg;
+    msg.className = "msg " + (S.msgLevel || "");
+    const acts = $("footActions");
+    acts.textContent = "";
+    if (!S.state) return;
+    if (S.confirm) {
+      msg.textContent = "You haven't tested these settings. Save anyway?";
+      msg.className = "msg warn";
+      acts.append(h("button", { type: "button", onclick: () => { S.confirm = false; renderFooter(); } }, "Cancel"),
+                  h("button", { type: "button", onclick: test }, "Test first"),
+                  h("button", { type: "button", class: "primary", onclick: () => save(true) }, "Save anyway"));
+      return;
+    }
+    if (S.canRevert && S.msgLevel === "error") {
+      acts.append(h("button", { type: "button", disabled: S.busy, onclick: revert }, "Go back to the previous settings"));
+    }
+    if (S.state.active !== "claude" && !isClaude()) {
+      acts.append(h("button", { type: "button", disabled: S.busy, onclick: useClaude }, "Switch back to Claude"));
+    }
+    const label = S.sel === S.state.active ? "Save & apply" : `Use ${prov().label}`;
+    acts.append(h("button", { type: "button", class: "primary", disabled: S.busy, onclick: () => save(false) }, S.busy ? "Working…" : label));
+  }
+
+  window.addEventListener("pywebviewready", () => { load().catch((e) => say(`Couldn't load: ${e}`, "error")); });
+})();
+</script>
+</body>
+</html>

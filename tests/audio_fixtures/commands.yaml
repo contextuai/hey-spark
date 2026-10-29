@@ -1,0 +1,27 @@
+# The 10 sample commands synthesized into cmd_01.wav .. cmd_10.wav (in this order).
+#
+# keywords: every entry must appear in the transcript for the command to count as correct.
+# Matching is done on normalized text (lowercase, punctuation and hyphens removed, so
+# "E-mails?" -> "emails" and "what's" -> "whats") as a substring test. An entry may list
+# alternatives separated by "|" (e.g. "five|5") because Whisper writes numbers either way.
+commands:
+  - text: "What time is it?"
+    keywords: ["time"]
+  - text: "What's the weather like today?"
+    keywords: ["weather", "today"]
+  - text: "Set a timer for five minutes."
+    keywords: ["timer", "five|5", "minute"]
+  - text: "What's on my calendar tomorrow?"
+    keywords: ["calendar", "tomorrow"]
+  - text: "Do I have any new emails?"
+    keywords: ["email"]
+  - text: "Show me my open pull requests."
+    keywords: ["pull request"]
+  - text: "What's the capital of Japan?"
+    keywords: ["japan"]
+  - text: "New topic. Let's talk about something else."
+    keywords: ["new topic"]
+  - text: "Remind me to call mom at six."
+    keywords: ["remind", "mom", "six|6"]
+  - text: "Turn up the volume a little."
+    keywords: ["volume"]

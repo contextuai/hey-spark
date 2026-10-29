@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Shortcuts</title>
+<style>
+  :root {
+    --bg: #F6F7F9;
+    --surface: #FFFFFF;
+    --sunken: #EEF0F3;
+    --line: #E3E6EB;
+    --text: #15181E;
+    --muted: #677080;
+    --accent: #E63900;
+    --accent-soft: #FF47001F;
+    --ok: #10B981;
+    --warn: #F59E0B;
+    --err: #EF4444;
+    --off: #A3AAB6;
+    --btn: #15181E;
+    --btn-text: #FFFFFF;
+    --mono: "Cascadia Mono", "Consolas", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318;
+      --surface: #1A1D24;
+      --sunken: #15181E;
+      --line: #2A2F39;
+      --text: #ECEEF2;
+      --muted: #9199A8;
+      --off: #5B6371;
+      --btn: #ECEEF2;
+      --btn-text: #111318;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13.5px/1.45 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    display: grid; grid-template-columns: 260px 1fr; overflow: hidden;
+  }
+  button {
+    appearance: none; font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); padding: 6px 12px; font-weight: 500;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--btn); color: var(--btn-text); border-color: var(--btn); }
+  button.danger { color: var(--err); }
+  button.danger.armed { background: var(--err); color: #fff; border-color: var(--err); }
+
+  aside { border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; background: var(--sunken); }
+  .side-head { padding: 16px 14px 10px; display: flex; align-items: center; justify-content: space-between; }
+  .side-head h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  .list { overflow-y: auto; padding: 0 8px 12px; flex: 1; }
+  .item { padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid transparent; }
+  .item:hover { background: var(--surface); }
+  .item.sel { background: var(--surface); border-color: var(--line); }
+  .item .nm { font-weight: 500; display: flex; align-items: center; gap: 8px; }
+  .item .nm .off { font-size: 11px; color: var(--muted); font-weight: 400; }
+  .item .sub { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .empty-list { color: var(--muted); padding: 8px 10px; font-size: 12.5px; }
+
+  main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .tester { padding: 12px 22px; border-bottom: 1px solid var(--line); background: var(--accent-soft); }
+  .tester label { font-weight: 600; font-size: 12.5px; }
+  .tester .row { display: flex; gap: 8px; margin-top: 6px; }
+  .tester input { flex: 1; }
+  .result { margin-top: 6px; font-size: 12.5px; color: var(--muted); min-height: 18px; }
+  .result b { color: var(--text); }
+  .pane { flex: 1; overflow-y: auto; padding: 18px 22px 26px; min-height: 0; }
+  h2 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
+  .muted { color: var(--muted); }
+  .help { color: var(--muted); font-size: 12.5px; margin: 4px 0 14px; max-width: 720px; }
+  .field { margin: 0 0 14px; max-width: 760px; }
+  .field > label { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 5px; }
+  .field .sub { color: var(--muted); font-size: 12px; margin: -2px 0 6px; }
+  input[type=text], textarea {
+    width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+    font: inherit; padding: 7px 10px;
+  }
+  textarea { resize: vertical; line-height: 1.5; }
+  textarea.triggers { min-height: 96px; }
+  textarea.prompt { min-height: 170px; }
+  .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--sunken); }
+  .seg button { border: 0; border-radius: 0; background: transparent; padding: 5px 12px; font-size: 12.5px; color: var(--muted); }
+  .seg button + button { border-left: 1px solid var(--line); }
+  .seg button[aria-pressed="true"] { color: var(--text); background: var(--surface); font-weight: 600; }
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .track { width: 38px; height: 22px; border-radius: 999px; background: var(--off); position: relative; transition: background .2s; flex: none; }
+  .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .switch input:checked + .track { background: var(--ok); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .actions { display: flex; gap: 8px; margin-top: 6px; flex-wrap: wrap; align-items: center; }
+  .err { color: var(--err); margin-top: 10px; user-select: text; }
+  .saved { color: var(--ok); font-size: 12.5px; }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 18px; overflow-wrap: anywhere; user-select: text; }
+</style>
+</head>
+<body>
+  <aside>
+    <div class="side-head">
+      <h1>Shortcuts</h1>
+      <button id="add" type="button" title="New shortcut">+ New</button>
+    </div>
+    <div class="list" id="list"></div>
+  </aside>
+
+  <main>
+    <section class="tester">
+      <label for="probe">Try a phrase</label>
+      <div class="row">
+        <input id="probe" type="text" placeholder="Good morning, how is today looking?" autocomplete="off">
+      </div>
+      <div class="result" id="result">Type what you'd say to see which shortcut fires.</div>
+    </section>
+
+    <section class="pane">
+      <h2 id="title">New shortcut</h2>
+      <p class="help">Say any of the phrases and <span class="nm">Spark</span> sends your prompt to Claude instead of the words. A few extra words around the phrase are fine; they're passed along too.</p>
+
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" type="text" placeholder="Morning briefing" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="triggers">Phrases you'll say</label>
+        <div class="sub">One per line, two words or more (one is fine when said on its own). Case and punctuation don't matter.</div>
+        <textarea id="triggers" class="triggers" placeholder="good morning&#10;how is today looking"></textarea>
+      </div>
+      <div class="field">
+        <label for="prompt">Prompt Spark sends</label>
+        <div class="sub">Write it like you'd brief a colleague: what to check, in what order, how long the answer should be.</div>
+        <textarea id="prompt" class="prompt" placeholder="Give me my morning briefing: today's meetings with times and who's in them, unread email that needs me, pull requests waiting for my review. Under thirty seconds."></textarea>
+      </div>
+      <div class="field">
+        <label>Model</label>
+        <div class="sub">Deep suits multi-step checks across several tools; Fast suits a single quick lookup.</div>
+        <div class="seg" id="route" role="group" aria-label="Model">
+          <button type="button" data-route="auto" aria-pressed="true">Auto</button>
+          <button type="button" data-route="fast" aria-pressed="false">Fast</button>
+          <button type="button" data-route="deep" aria-pressed="false">Deep</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="switch"><input id="enabled" type="checkbox" checked><span class="track"></span><span>On</span></label>
+      </div>
+      <div class="field">
+        <label class="switch"><input id="exact" type="checkbox"><span class="track"></span><span>Only when said on its own</span></label>
+        <div class="sub">For short phrases like "what's next": the shortcut fires only when the phrase is all you say, so "what's next week like?" is still a normal question.</div>
+      </div>
+      <div class="actions">
+        <button id="save" class="primary" type="button">Save</button>
+        <button id="delete" class="danger" type="button" hidden>Delete</button>
+        <span class="saved" id="saved" hidden>Saved</span>
+      </div>
+      <div class="err" id="err" hidden></div>
+      <div class="foot" id="file"></div>
+    </section>
+  </main>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const S = { items: [], sel: null, route: "auto", name: "Spark" };
+  let armTimer = null, savedTimer = null, probeTimer = null;
+
+  const api = () => window.pywebview && window.pywebview.api;
+
+  function apply(res) {
+    if (!res) return false;
+    if (!res.ok) { showErr(res.error || "Something went wrong."); return false; }
+    if (res.shortcuts) S.items = res.shortcuts;
+    if (res.file) $("file").textContent = `Saved in ${res.file}`;
+    if (res.name) { S.name = res.name; document.querySelectorAll(".nm").forEach((e) => { if (e.tagName === "SPAN") e.textContent = res.name; }); }
+    return true;
+  }
+
+  function showErr(msg) { $("err").textContent = msg; $("err").hidden = !msg; }
+
+  function renderList() {
+    const list = $("list");
+    list.textContent = "";
+    if (!S.items.length) {
+      const d = document.createElement("div");
+      d.className = "empty-list"; d.textContent = "No shortcuts yet.";
+      list.appendChild(d); return;
+    }
+    for (const s of S.items) {
+      const d = document.createElement("div");
+      d.className = "item" + (s.id === S.sel ? " sel" : "");
+      const nm = document.createElement("div"); nm.className = "nm"; nm.textContent = s.name;
+      if (!s.enabled) { const off = document.createElement("span"); off.className = "off"; off.textContent = "off"; nm.appendChild(off); }
+      const sub = document.createElement("div"); sub.className = "sub"; sub.textContent = `“${s.triggers[0]}”` + (s.triggers.length > 1 ? ` +${s.triggers.length - 1}` : "");
+      d.append(nm, sub);
+      d.addEventListener("click", () => select(s.id));
+      list.appendChild(d);
+    }
+  }
+
+  function setRoute(route) {
+    S.route = route;
+    document.querySelectorAll("#route button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.route === route)));
+  }
+
+  function select(id) {
+    S.sel = id;
+    const s = S.items.find((x) => x.id === id);
+    $("title").textContent = s ? s.name : "New shortcut";
+    $("name").value = s ? s.name : "";
+    $("triggers").value = s ? s.triggers.join("\n") : "";
+    $("prompt").value = s ? s.prompt : "";
+    $("enabled").checked = s ? s.enabled : true;
+    $("exact").checked = s ? !!s.exact : false;
+    setRoute(s ? s.route : "auto");
+    $("delete").hidden = !s;
+    disarm(); showErr(""); $("saved").hidden = true;
+    renderList();
+  }
+
+  function disarm() { $("delete").classList.remove("armed"); $("delete").textContent = "Delete"; clearTimeout(armTimer); }
+
+  async function save() {
+    if (!api()) return;
+    showErr("");
+    const data = {
+      name: $("name").value,
+      triggers: $("triggers").value.split("\n"),
+      prompt: $("prompt").value,
+      route: S.route,
+      enabled: $("enabled").checked,
+      exact: $("exact").checked,
+    };
+    if (S.sel) data.id = S.sel;
+    const res = await api().save(data);
+    if (apply(res)) {
+      select(res.saved);
+      $("saved").hidden = false;
+      clearTimeout(savedTimer);
+      savedTimer = setTimeout(() => { $("saved").hidden = true; }, 2500);
+      probe();
+    }
+  }
+
+  async function remove() {
+    if (!S.sel || !api()) return;
+    const b = $("delete");
+    if (!b.classList.contains("armed")) {
+      b.classList.add("armed"); b.textContent = "Click again to delete";
+      armTimer = setTimeout(disarm, 4000); return;
+    }
+    if (apply(await api().remove(S.sel))) select(S.items.length ? S.items[0].id : null);
+  }
+
+  async function probe() {
+    if (!api()) return;
+    const phrase = $("probe").value;
+    const out = $("result");
+    if (!phrase.trim()) { out.textContent = "Type what you'd say to see which shortcut fires."; return; }
+    const res = await api().test(phrase);
+    out.textContent = "";
+    if (!res || !res.ok || !res.match) { out.textContent = "No shortcut. Spark would answer the words as they are."; return; }
+    const m = res.match;
+    const b = document.createElement("b"); b.textContent = m.name;
+    out.append("Fires ", b, ` (matched “${m.trigger}”${m.extra ? `, extra: “${m.extra}”` : ""}; ${m.route} model).`);
+  }
+
+  $("add").addEventListener("click", () => select(null));
+  $("save").addEventListener("click", save);
+  $("delete").addEventListener("click", remove);
+  document.querySelectorAll("#route button").forEach((b) => b.addEventListener("click", () => setRoute(b.dataset.route)));
+  $("probe").addEventListener("input", () => { clearTimeout(probeTimer); probeTimer = setTimeout(probe, 200); });
+  document.addEventListener("keydown", (e) => { if ((e.ctrlKey || e.metaKey) && e.key === "s") { e.preventDefault(); save(); } });
+
+  window.addEventListener("pywebviewready", async () => {
+    if (apply(await api().list())) select(S.items.length ? S.items[0].id : null);
+  });
+  renderList();
+})();
+</script>
+</body>
+</html>

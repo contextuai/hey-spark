@@ -1,0 +1,192 @@
+{
+  "babble_10s.wav": {
+    "duration_s": 10.0,
+    "kind": "babble",
+    "pink_rms_dbfs": -35.0,
+    "rms_dbfs": -24.588640158579743,
+    "samples": 160000,
+    "sentences": [
+      "And in other news tonight, the city council voted to approve the new budget.",
+      "The home team scored twice in the second half to take the lead.",
+      "Stay tuned after the break for the full weather forecast for the weekend.",
+      "Researchers say the new battery design could double the range of electric cars."
+    ],
+    "speech_rms_dbfs": -25.0
+  },
+  "cmd_01.wav": {
+    "duration_s": 1.57,
+    "keywords": [
+      "time"
+    ],
+    "kind": "command",
+    "rms_dbfs": -18.33405278149048,
+    "samples": 25120,
+    "text": "What time is it?"
+  },
+  "cmd_02.wav": {
+    "duration_s": 2.18,
+    "keywords": [
+      "weather",
+      "today"
+    ],
+    "kind": "command",
+    "rms_dbfs": -20.57850970406534,
+    "samples": 34880,
+    "text": "What's the weather like today?"
+  },
+  "cmd_03.wav": {
+    "duration_s": 2.39,
+    "keywords": [
+      "timer",
+      "five|5",
+      "minute"
+    ],
+    "kind": "command",
+    "rms_dbfs": -20.153627150332238,
+    "samples": 38240,
+    "text": "Set a timer for five minutes."
+  },
+  "cmd_04.wav": {
+    "duration_s": 2.33,
+    "keywords": [
+      "calendar",
+      "tomorrow"
+    ],
+    "kind": "command",
+    "rms_dbfs": -18.94554140745618,
+    "samples": 37280,
+    "text": "What's on my calendar tomorrow?"
+  },
+  "cmd_05.wav": {
+    "duration_s": 2.07,
+    "keywords": [
+      "email"
+    ],
+    "kind": "command",
+    "rms_dbfs": -20.138541763799644,
+    "samples": 33120,
+    "text": "Do I have any new emails?"
+  },
+  "cmd_06.wav": {
+    "duration_s": 2.64,
+    "keywords": [
+      "pull request"
+    ],
+    "kind": "command",
+    "rms_dbfs": -18.244228819627356,
+    "samples": 42240,
+    "text": "Show me my open pull requests."
+  },
+  "cmd_07.wav": {
+    "duration_s": 2.33,
+    "keywords": [
+      "japan"
+    ],
+    "kind": "command",
+    "rms_dbfs": -22.22869075856499,
+    "samples": 37280,
+    "text": "What's the capital of Japan?"
+  },
+  "cmd_08.wav": {
+    "duration_s": 3.45,
+    "keywords": [
+      "new topic"
+    ],
+    "kind": "command",
+    "rms_dbfs": -18.850073968538158,
+    "samples": 55200,
+    "text": "New topic. Let's talk about something else."
+  },
+  "cmd_09.wav": {
+    "duration_s": 2.59,
+    "keywords": [
+      "remind",
+      "mom",
+      "six|6"
+    ],
+    "kind": "command",
+    "rms_dbfs": -17.902439001562797,
+    "samples": 41440,
+    "text": "Remind me to call mom at six."
+  },
+  "cmd_10.wav": {
+    "duration_s": 2.12,
+    "keywords": [
+      "volume"
+    ],
+    "kind": "command",
+    "rms_dbfs": -20.850362619207026,
+    "samples": 33920,
+    "text": "Turn up the volume a little."
+  },
+  "noise_pink_10s.wav": {
+    "duration_s": 10.0,
+    "kind": "noise",
+    "rms_dbfs": -30.00026262336418,
+    "samples": 160000,
+    "seed": 2
+  },
+  "silence_3s.wav": {
+    "dither_dbfs": -60.0,
+    "duration_s": 3.0,
+    "kind": "silence",
+    "rms_dbfs": -60.038318887438976,
+    "samples": 48000
+  },
+  "utterance_with_tail.wav": {
+    "duration_s": 3.23,
+    "kind": "utterance_with_tail",
+    "lead_silence_s": 0.3,
+    "rms_dbfs": -22.468603140388726,
+    "samples": 51680,
+    "speech_end_s": 1.73,
+    "speech_start_s": 0.3,
+    "tail_silence_s": 1.5,
+    "text": "What's the capital of Japan?"
+  },
+  "wake_hey_spark_1.wav": {
+    "duration_s": 1.59,
+    "kind": "wake_positive",
+    "length_scale": 0.9,
+    "rms_dbfs": -22.46762080054222,
+    "samples": 25440,
+    "text": "Hey Spark"
+  },
+  "wake_hey_spark_2.wav": {
+    "duration_s": 1.57,
+    "kind": "wake_positive",
+    "length_scale": 1.0,
+    "rms_dbfs": -23.217719319227403,
+    "samples": 25120,
+    "text": "Hey Spark"
+  },
+  "wake_hey_spark_3.wav": {
+    "duration_s": 1.77,
+    "kind": "wake_positive",
+    "length_scale": 1.15,
+    "rms_dbfs": -20.02776117018058,
+    "samples": 28320,
+    "text": "Hey Spark"
+  },
+  "wake_negative_1.wav": {
+    "duration_s": 1.51,
+    "kind": "wake_negative",
+    "rms_dbfs": -19.85124034604966,
+    "samples": 24160,
+    "text": "Hey Mark"
+  },
+  "wake_negative_2.wav": {
+    "duration_s": 1.55,
+    "kind": "wake_negative",
+    "rms_dbfs": -20.977913272863375,
+    "samples": 24800,
+    "text": "Hey Sam"
+  },
+  "wake_negative_3.wav": {
+    "duration_s": 1.76,
+    "kind": "wake_negative",
+    "rms_dbfs": -23.357856067775934,
+    "samples": 28160,
+    "text": "Park the car"
+  }
+}

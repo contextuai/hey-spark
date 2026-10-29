@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Personality &amp; Voice</title>
+<style>
+  :root {
+    --bg: #F6F7F9;
+    --surface: #FFFFFF;
+    --sunken: #EEF0F3;
+    --line: #E3E6EB;
+    --text: #15181E;
+    --muted: #677080;
+    --accent: #E63900;
+    --accent-soft: #FF47001F;
+    --ok: #10B981;
+    --warn: #F59E0B;
+    --err: #EF4444;
+    --off: #A3AAB6;
+    --btn: #15181E;
+    --btn-text: #FFFFFF;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #111318;
+      --surface: #1A1D24;
+      --sunken: #15181E;
+      --line: #2A2F39;
+      --text: #ECEEF2;
+      --muted: #9199A8;
+      --off: #5B6371;
+      --btn: #ECEEF2;
+      --btn-text: #111318;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 13.5px/1.45 "Segoe UI Variable Text", "Segoe UI", -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  button {
+    appearance: none; font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--surface); color: var(--text); padding: 6px 12px; font-weight: 500;
+  }
+  button:hover:not(:disabled) { border-color: var(--muted); }
+  button:disabled { opacity: .5; cursor: default; }
+  button:focus-visible, input:focus-visible, .card:focus-visible, .voice:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.primary { background: var(--btn); color: var(--btn-text); border-color: var(--btn); }
+
+  .pane { flex: 1; overflow-y: auto; padding: 20px 24px 12px; min-height: 0; }
+  h2 { font-size: 15px; margin: 0 0 4px; font-weight: 600; }
+  section + section { margin-top: 24px; }
+  .help { color: var(--muted); font-size: 12.5px; margin: 0 0 12px; max-width: 720px; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; max-width: 760px; }
+  .card { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--surface); cursor: pointer; text-align: left; }
+  .card:hover { border-color: var(--muted); }
+  .card[aria-checked="true"] { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; background: var(--accent-soft); }
+  .card .nm { font-weight: 600; }
+  .card .sub { color: var(--muted); font-size: 12.5px; margin-top: 2px; }
+
+  .field { margin: 14px 0 0; max-width: 760px; }
+  .field > label { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 5px; }
+  input[type=text] {
+    width: 260px; max-width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
+    font: inherit; padding: 7px 10px;
+  }
+  .switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; font-weight: 500; }
+  .switch input { position: absolute; opacity: 0; width: 0; height: 0; }
+  .track { width: 38px; height: 22px; border-radius: 999px; background: var(--off); position: relative; transition: background .2s; flex: none; }
+  .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; }
+  .switch input:checked + .track { background: var(--ok); }
+  .switch input:checked + .track::after { transform: translateX(16px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .voices { border: 1px solid var(--line); border-radius: 10px; background: var(--surface); max-width: 760px; overflow: hidden; }
+  .voice { display: grid; grid-template-columns: 18px 1fr auto auto; gap: 10px; align-items: center; padding: 9px 12px; cursor: pointer; }
+  .voice + .voice { border-top: 1px solid var(--line); }
+  .voice:hover { background: var(--sunken); }
+  .voice.off { opacity: .55; cursor: default; }
+  .voice .dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--muted); }
+  .voice[aria-checked="true"] .dot { border-color: var(--accent); background: radial-gradient(var(--accent) 45%, transparent 50%); }
+  .voice .nm { font-weight: 500; }
+  .voice .sub { color: var(--muted); font-size: 12px; }
+  .voice .state { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .voice .state.ok { color: var(--ok); }
+  .voice button { padding: 3px 10px; font-size: 12.5px; }
+
+  footer { border-top: 1px solid var(--line); padding: 12px 24px; display: flex; gap: 12px; align-items: center; background: var(--surface); }
+  .status { font-size: 12.5px; color: var(--muted); flex: 1; overflow-wrap: anywhere; }
+  .status.err { color: var(--err); }
+  .status.ok { color: var(--ok); }
+</style>
+</head>
+<body>
+  <div class="pane">
+    <section>
+      <h2>Personality</h2>
+      <p class="help">How <span class="appname">Spark</span> talks: its own replies and its fixed lines, like "On it" or "Should I go ahead?".</p>
+      <div class="cards" id="personas" role="radiogroup" aria-label="Personality"></div>
+      <div class="field" id="addressField">
+        <label for="address">What it calls you</label>
+        <input id="address" type="text" maxlength="40" placeholder="sir" autocomplete="off">
+        <div class="help" style="margin-top:4px">For example sir, ma'am, boss or your name. Leave it empty for no title.</div>
+      </div>
+      <div class="field">
+        <label class="switch"><input id="wake" type="checkbox"><span class="track"></span><span id="wakeLabel">Answer the wake word out loud</span></label>
+      </div>
+    </section>
+
+    <section>
+      <h2>Voice</h2>
+      <p class="help">The voice is downloaded once, when you save. Kokoro voices sound more natural; Piper voices answer a little faster on slow computers.</p>
+      <div class="voices" id="voices" role="radiogroup" aria-label="Voice"></div>
+      <audio id="player" hidden></audio>
+    </section>
+  </div>
+
+  <footer>
+    <div class="status" id="status" role="status"></div>
+    <button class="primary" id="save" type="button">Save</button>
+  </footer>
+
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const S = { view: null, persona: "standard", voice: "", busy: false };
+
+  function el(tag, attrs = {}, ...kids) {
+    const n = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === "class") n.className = v;
+      else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+      else n.setAttribute(k, v);
+    }
+    for (const k of kids) n.append(k);
+    return n;
+  }
+
+  function status(text, kind = "") {
+    $("status").textContent = text || "";
+    $("status").className = "status" + (kind ? " " + kind : "");
+  }
+
+  function persona() {
+    return S.view.personas.find((p) => p.key === S.persona) || S.view.personas[0];
+  }
+
+  function wakeLine() {
+    const addr = $("address").value.trim();
+    return (persona().wake_line || "Yes?").replace("{addr}", addr ? ", " + addr : "");
+  }
+
+  function render() {
+    const v = S.view;
+    document.querySelectorAll(".appname").forEach((n) => (n.textContent = v.name));
+    const cards = $("personas");
+    cards.replaceChildren(...v.personas.map((p) => el("div", {
+      class: "card", role: "radio", tabindex: "0", "aria-checked": String(p.key === S.persona),
+      onclick: () => pickPersona(p.key),
+      onkeydown: (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); pickPersona(p.key); } },
+    }, el("div", { class: "nm" }, p.label), el("div", { class: "sub" }, p.description))));
+    $("addressField").hidden = S.persona === "standard";
+    $("wakeLabel").textContent = `Answer the wake word out loud ("${wakeLine()}" instead of the chime)`;
+    $("voices").replaceChildren(...v.voices.map((x) => {
+      const state = !x.available ? "Not in this build" : x.downloaded ? "Downloaded" : `Downloads ${x.size}`;
+      const play = el("button", {
+        type: "button", title: "Play a sample",
+        onclick: (e) => { e.stopPropagation(); preview(x.id); },
+      }, "Play");
+      if (!x.available || !x.downloaded) play.disabled = true;
+      return el("div", {
+        class: "voice" + (x.available ? "" : " off"), role: "radio", tabindex: x.available ? "0" : "-1",
+        "aria-checked": String(x.id === S.voice), "aria-disabled": String(!x.available),
+        onclick: () => pickVoice(x),
+        onkeydown: (e) => { if (e.key === " " || e.key === "Enter") { e.preventDefault(); pickVoice(x); } },
+      },
+        el("span", { class: "dot" }),
+        el("span", {}, el("div", { class: "nm" }, x.label),
+          el("div", { class: "sub" }, [x.accent, x.license].filter(Boolean).join(" · "))),
+        el("span", { class: "state" + (x.downloaded && x.available ? " ok" : "") }, state),
+        play);
+    }));
+  }
+
+  function pickPersona(key) {
+    if (key === S.persona) return;
+    S.persona = key;
+    const p = persona();
+    $("wake").checked = p.wake_reply;
+    const suggested = S.view.voices.find((x) => x.id === p.voice && x.available);
+    if (suggested && suggested.id !== S.voice) {
+      S.voice = suggested.id;
+      status(`Voice set to ${suggested.label}, which suits the ${p.label.toLowerCase()}. You can pick another below.`);
+    } else {
+      status("");
+    }
+    render();
+  }
+
+  function pickVoice(x) {
+    if (!x.available) return;
+    S.voice = x.id;
+    status(x.downloaded ? "" : `${x.label} downloads when you save (about ${x.size}).`);
+    render();
+  }
+
+  function form() {
+    return { persona: S.persona, address_as: $("address").value, wake_reply: $("wake").checked, voice: S.voice };
+  }
+
+  async function preview(id) {
+    status("Preparing a sample…");
+    const r = await window.pywebview.api.preview({ ...form(), voice: id });
+    if (!r.ok) { status(r.error, "err"); return; }
+    status(`“${r.text}”`);
+    const audio = $("player");
+    audio.src = r.audio;
+    audio.play().catch(() => status("Couldn't play the sample here.", "err"));
+  }
+
+  function load(view) {
+    S.view = view;
+    S.persona = view.persona;
+    S.voice = view.voice;
+    $("address").value = view.address_as;
+    $("wake").checked = view.wake_reply;
+    render();
+  }
+
+  $("address").addEventListener("input", render);
+
+  $("save").addEventListener("click", async () => {
+    if (S.busy) return;
+    S.busy = true;
+    $("save").disabled = true;
+    const v = S.view.voices.find((x) => x.id === S.voice);
+    status(v && !v.downloaded ? `Saving. If ${S.view.name} is running, it downloads ${v.label} (about ${v.size}) and restarts…` : "Saving…");
+    try {
+      const r = await window.pywebview.api.save(form());
+      if (r.voices) load(r);
+      const now = S.view.voices.find((x) => x.id === S.voice);
+      if (!r.ok) status(r.error, "err");
+      else if (now && !now.downloaded) status(`Saved. ${now.label} downloads when ${S.view.name} starts (about ${now.size}).`, "ok");
+      else status(`Saved. ${S.view.name} uses it from now on.`, "ok");
+    } catch (e) {
+      status(String(e), "err");
+    } finally {
+      S.busy = false;
+      $("save").disabled = false;
+    }
+  });
+
+  async function start() {
+    const r = await window.pywebview.api.load();
+    if (r.ok) load(r); else status(r.error, "err");
+  }
+  if (window.pywebview && window.pywebview.api && window.pywebview.api.load) start();
+  else window.addEventListener("pywebviewready", start);
+})();
+</script>
+</body>
+</html>
