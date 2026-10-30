@@ -67,10 +67,13 @@ def _leaf(exc: BaseException) -> BaseException:
     return exc
 
 
-def friendly_probe_error(exc: BaseException, *, stderr_tail: str = "") -> str:
+def friendly_probe_error(
+    exc: BaseException, *, stderr_tail: str = "", status: int | None = None
+) -> str:
+    """``status``: the HTTP status found by :func:`_http_status` when the error hides it."""
     exc = _leaf(exc)
     text = str(exc).strip()
-    status = getattr(getattr(exc, "response", None), "status_code", None)
+    status = getattr(getattr(exc, "response", None), "status_code", None) or status
     if status in (401, 403):
         return f"The server refused the credentials (HTTP {status}). Check the token in .env."
     if status == 404:
@@ -101,6 +104,56 @@ def _stderr_tail(fh: Any) -> str:
     except (OSError, ValueError):
         return ""
     return lines[-1][:300] if lines else ""
+
+
+def _hides_status(exc: BaseException) -> bool:
+    """The mcp client turns an HTTP error into a bare JSON-RPC error ("Server returned an error
+    response") and drops the status, so a refused token looks like any other failure."""
+    leaf = _leaf(exc)
+    return (
+        type(leaf).__name__ == "MCPError"
+        and getattr(getattr(leaf, "response", None), "status_code", None) is None
+    )
+
+
+async def _http_status(config: Mapping[str, Any], environ: Mapping[str, str]) -> int | None:
+    """One plain request to an http/sse server, for the status the mcp client didn't report.
+    None if it can't be had (or the server answers 2xx)."""
+    kind = config.get("type")
+    if kind not in ("http", "sse"):
+        return None
+    import httpx2
+
+    url = expand_vars(str(config.get("url", "")), environ).strip()
+    headers = {k: str(v) for k, v in _expand(config.get("headers") or {}, environ).items()}
+    if kind == "http":
+        headers.setdefault("Accept", "application/json, text/event-stream")
+        method, body = (
+            "POST",
+            {
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-06-18",
+                    "capabilities": {},
+                    "clientInfo": {"name": "spark-probe", "version": "1"},
+                },
+            },
+        )
+    else:
+        headers.setdefault("Accept", "text/event-stream")
+        method, body = "GET", None
+    try:
+        async with (
+            httpx2.AsyncClient(timeout=10.0, follow_redirects=True) as http,
+            http.stream(method, url, headers=headers, json=body) as response,
+        ):
+            status = response.status_code
+    except Exception:
+        log.debug("MCP test: status check failed", exc_info=True)
+        return None
+    return status if status >= 400 else None
 
 
 async def _list_tools(client: Any) -> list[Any]:
@@ -188,7 +241,11 @@ async def probe_async(
         if isinstance(exc, KeyboardInterrupt | SystemExit):
             raise
         log.info("MCP test failed: %s", type(_leaf(exc)).__name__, exc_info=True)
-        return ProbeResult(False, error=friendly_probe_error(exc, stderr_tail=_stderr_tail(errlog)))
+        status = await _http_status(config, env) if _hides_status(exc) else None
+        return ProbeResult(
+            False,
+            error=friendly_probe_error(exc, stderr_tail=_stderr_tail(errlog), status=status),
+        )
     finally:
         if http is not None:
             try:

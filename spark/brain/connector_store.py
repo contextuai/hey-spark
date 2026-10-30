@@ -21,8 +21,9 @@ are stored here too, as ``{"kind": "claude_ai", "enabled": ..., "tools": [...]}`
 its ``enabled`` wins and each listed tool's mode replaces the configured one.
 
 :func:`merge_into` adds these servers to what :func:`spark.brain.mcp_config.load_mcp_servers`
-reads from ``mcp_servers.json`` and ``config.yaml``. A server defined there keeps priority: an
-app server with the same name is skipped with a warning (the window refuses to create one).
+reads from ``mcp_servers.json`` and ``config.yaml``. A server switched on in ``config.yaml``
+keeps its name: an app server with the same name is skipped with a warning (the window refuses
+to create one). One that is off there gives the name up, and the app server replaces it.
 
 Pasted text (:func:`parse_pasted`) may be a Claude Desktop ``claude_desktop_config.json``
 (``{"mcpServers": {...}}``), a map of named servers, or one server object. Two common stdio
@@ -63,6 +64,8 @@ _ENV_NAME_CLEAN = re.compile(r"[^A-Z0-9]+")
 _AUTH_SCHEME = re.compile(r"^(Bearer|Basic|Token|Bot)\s+(\S.*)$", re.IGNORECASE)
 _SECRETISH = re.compile(r"key|token|secret|pass|pat\b|auth|credential|cookie|session", re.I)
 _TOKENISH = re.compile(r"^[A-Za-z0-9_\-.~+/=]{20,}$")
+_VSCODE_INPUT = re.compile(r"\$\{input:[^}]*\}")
+_VSCODE_ENV = re.compile(r"\$\{env:([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
 class ConnectorError(ValueError):
@@ -380,7 +383,37 @@ def normalize_entry(raw: Mapping[str, Any]) -> tuple[dict[str, Any], list[str]]:
         raise ConnectorError(f"unsupported server type {kind!r} (use stdio, http or sse)")
     if dropped:
         notes.append(f"Ignored settings Spark doesn't use: {', '.join(dropped)}.")
+    notes += _vscode_placeholders(out)
     return out, notes
+
+
+def _vscode_placeholders(config: dict[str, Any]) -> list[str]:
+    """VS Code's own variables in a config copied from its docs (GitHub's README shows one):
+    ``${env:NAME}`` becomes Spark's ``${NAME}``; ``${input:id}`` makes VS Code prompt for the
+    value, which Spark can't do, so it's refused rather than stored as if it were the token."""
+    converted = False
+
+    def fix(value: str) -> str:
+        nonlocal converted
+        m = _VSCODE_INPUT.search(value)
+        if m:
+            raise ConnectorError(
+                f"{m.group(0)} is a VS Code prompt for a value, and Spark can't ask for it. "
+                "Put the real value (your token or key) in its place; Spark moves it to .env."
+            )
+        new = _VSCODE_ENV.sub(r"${\1}", value)
+        converted |= new != value
+        return new
+
+    for key in ("command", "url"):
+        if isinstance(config.get(key), str):
+            config[key] = fix(config[key])
+    if "args" in config:
+        config["args"] = [fix(a) for a in config["args"]]
+    for key in ("env", "headers"):
+        if key in config:
+            config[key] = {k: fix(v) for k, v in config[key].items()}
+    return ["Changed VS Code's ${env:NAME} to Spark's ${NAME}."] if converted else []
 
 
 def extract_secrets(name: str, config: dict[str, Any], sink: SecretSink) -> list[str]:
@@ -497,6 +530,14 @@ def policy_lists(entry: Mapping[str, Any]) -> dict[str, list[str]]:
     return lists
 
 
+def configured_on(configured: Mapping[str, Any], name: str) -> bool:
+    """Whether ``config.yaml`` switches server ``name`` on. Only such a server keeps its name
+    from the Connectors window; one that is off (like the shipped ``github`` example) or has
+    no ``config.yaml`` entry gives the name to a window server, which then replaces it."""
+    cfg = configured.get(name)
+    return cfg is not None and bool(getattr(cfg, "enabled", False))
+
+
 def merge_into(
     settings: Settings,
     raw_servers: dict[str, Any],
@@ -514,10 +555,10 @@ def merge_into(
             except ValueError as exc:
                 warn(f"claude.ai connector {name!r} from {settings.connectors.ui_file}: {exc}")
             continue
-        if name in raw_servers or name in configured:
+        if name in configured and configured_on(configured, name):
             warn(
-                f"MCP server {name!r} from {settings.connectors.ui_file} skipped: the name is "
-                "already used in config.yaml / mcp_servers.json"
+                f"MCP server {name!r} from {settings.connectors.ui_file} skipped: a server "
+                "with this name is switched on in config.yaml"
             )
             continue
         config = entry.get("config")
@@ -634,8 +675,8 @@ def add_servers(
     replace: bool = False,
 ) -> AddResult:
     """Parse pasted text and store the servers (disabled, untested). ``reserved`` are names
-    taken by config.yaml / mcp_servers.json. An existing app server is skipped unless
-    ``replace`` (its tool modes are kept)."""
+    taken by servers switched on in config.yaml (:func:`configured_on`). An existing app
+    server is skipped unless ``replace`` (its tool modes are kept)."""
     with _LOCK:
         path = store_path(settings)
         servers = load_store(path)
@@ -645,7 +686,9 @@ def add_servers(
         result = AddResult([], {}, [], {})
         for server in parsed:
             if server.name in taken:
-                result.skipped[server.name] = "a server with this name is set up in config.yaml"
+                result.skipped[server.name] = (
+                    "a server with this name is switched on in config.yaml; use another name"
+                )
                 continue
             if server.name.startswith("claude_ai_"):
                 result.skipped[server.name] = "names starting with claude_ai_ are reserved"
@@ -702,13 +745,35 @@ def set_tool_mode(settings: Settings, name: str, tool: str | None, mode: str) ->
         return entry
 
 
-def remove(settings: Settings, name: str) -> None:
+def remove(settings: Settings, name: str) -> list[str]:
+    """Delete a window server, and from ``.env`` the secrets this window stored for it
+    (``SPARK_MCP_*``) that nothing else refers to. Returns the variables removed."""
     with _LOCK:
         path = store_path(settings)
         servers = load_store(path)
-        if servers.pop(name, None) is None:
+        entry = servers.pop(name, None)
+        if entry is None:
             raise ConnectorError(f"No connector named {name!r}.")
         save_store(path, servers)
+        mine = _all_vars(entry.get("config"))
+        if not mine:
+            return []
+        from spark.brain.mcp_config import McpConfigError, read_mcp_json
+
+        try:
+            hand_written = read_mcp_json(settings.path(settings.connectors.mcp_config))
+        except McpConfigError:
+            return []  # can't tell what the file refers to: keep every value
+        in_use = _all_vars(hand_written) | _all_vars([e.get("config") for e in servers.values()])
+        unused = sorted(v for v in mine - in_use if v.startswith("SPARK_MCP_"))
+        if unused:
+            remove_env_vars(env_path(settings), unused)
+        return unused
+
+
+def _all_vars(value: Any) -> set[str]:
+    required, optional = referenced_vars(value)
+    return required | optional
 
 
 def record_test(

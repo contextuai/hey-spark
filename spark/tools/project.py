@@ -9,10 +9,10 @@ Spec §1 example, §8.3, §10 Phase 3. The steps, in order:
 4. a tracking task (:class:`GitHubIssueTracker`: an issue in the new repo),
 5. optionally a Claude Code window in the folder (:class:`ClaudeCodeLauncher`).
 
-Why ``gh`` and not the GitHub MCP server: ``mcp_servers.json`` starts the GitHub server with
-``--read-only``, which strips ``create_repository`` and ``issue_write``. ``gh`` keeps its own
-stored login, and Spark's PAT lives in ``SPARK_GITHUB_PAT`` (not ``GITHUB_TOKEN``), so it never
-changes the identity ``gh`` uses (docs/connectors.md §5).
+Why ``gh`` and not the GitHub MCP server: the MCP server is optional and off by default, and a
+fine-grained PAT for it usually can't create repos. ``gh`` keeps its own stored login, and
+Spark's PAT lives in ``SPARK_GITHUB_PAT`` (not ``GITHUB_TOKEN``), so it never changes the
+identity ``gh`` uses (docs/connectors.md §5).
 
 Everything external goes through small injectable interfaces (:class:`RepoHost`,
 :class:`Tracker`, :class:`SessionLauncher`, and a :data:`Runner` for subprocesses), so tests use

@@ -403,7 +403,7 @@ def test_repo_config_and_json_load(monkeypatch):
     }
     setup = load_mcp_servers(s, environ=env)
     assert set(setup.servers) == {"github", "composio"}
-    assert "--read-only" in setup.servers["github"]["args"]
+    assert "--read-only" not in setup.servers["github"]["args"]  # issue_write asks first
     assert set(setup.disabled) == {
         "github_remote",
         "composio_outlook",

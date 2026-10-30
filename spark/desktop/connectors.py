@@ -259,6 +259,8 @@ class ConnectorsApi:
             config = raw.get(name)
             if not isinstance(config, dict) or claudeai.is_claudeai(name):
                 continue
+            if name in entries and not store.configured_on(self._settings.connectors.servers, name):
+                continue  # a window server of the same name replaces this switched-off one
             servers.append(self._config_view(name, config, disabled.get(name)))
         servers += [self._claudeai_view(name, entries) for name in self._claudeai_names(entries)]
         return {
@@ -279,8 +281,9 @@ class ConnectorsApi:
     # --- changing ------------------------------------------------------------------------
 
     def _reserved(self) -> set[str]:
-        raw, _ = self._config_servers()
-        return set(raw) | set(self._settings.connectors.servers)
+        """Names a window server can't take: servers switched on in config.yaml."""
+        servers = self._settings.connectors.servers
+        return {name for name in servers if store.configured_on(servers, name)}
 
     def add(self, text: str) -> dict[str, Any]:
         """Paste -> stored servers (off, untested). The page then calls :meth:`test` on each."""
@@ -436,9 +439,12 @@ class ConnectorsApi:
             return {"ok": False, "error": "Disconnect claude.ai connectors on claude.ai."}
         try:
             entry = store.load_store(store.store_path(self._settings)).get(name, {})
-            store.remove(self._settings, name)
+            cleared = store.remove(self._settings, name)
         except ConnectorError as exc:
             return {"ok": False, "error": str(exc)}
+        log.info(
+            "connectors: removed %s (.env vars cleared: %s)", name, ", ".join(cleared) or "none"
+        )
         if entry.get("enabled"):
             self._dirty = True
         return {"ok": True}

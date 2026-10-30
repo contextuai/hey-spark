@@ -328,8 +328,8 @@ config is **UNVERIFIED**, so a Spark-specific name avoids the question.
 1. **GitHub PAT** → `SPARK_GITHUB_PAT`
    1. Go to github.com → Settings → Developer settings → Personal access tokens → **Fine-grained tokens** → Generate new token.
    2. Resource owner: your user. Expiration: 90 days. Repository access: *Only select repositories* (or All).
-   3. Repository permissions, all Read-only: **Contents, Issues, Pull requests, Commit statuses, Checks** (Metadata is added automatically).
-   4. For Phase 3 `start_project` via MCP only: also **Administration: Read and write** and **Issues: Read and write** (or use `gh` instead and keep the PAT read-only).
+   3. Repository permissions: **Issues: Read and write** (so Spark can create issues and comments after you say yes), and Read-only for **Contents, Pull requests, Commit statuses, Checks** (Metadata is added automatically). For a read-only Spark, make Issues Read-only too.
+   4. `start_project` creates repos with `gh`, not this PAT, so the PAT never needs **Administration**.
    5. If the account is an Enterprise Managed User, PATs may be disabled by the enterprise admin [R6].
 2. **GitHub MCP binary** → `SPARK_GITHUB_MCP_BIN`
    1. Download `github-mcp-server_Windows_x86_64.zip` from https://github.com/github/github-mcp-server/releases (v1.12.2 or later) and verify it against the release checksums file.
@@ -420,7 +420,7 @@ The per-server `allow_destructive` replaces the single `enabled_destructive` swi
 - `policy.classify(name)` returns `read`, `side_effect`, `destructive` or `unknown`. Precedence is destructive, then side_effect, then read. Tools on no list, tools of unloaded servers, and non-MCP tools are all `unknown`. The confirmation hook must deny `unknown` by default.
 - Other policy helpers: `is_allowed` (pre-approved read), `is_side_effecting`, `is_destructive`, `needs_confirmation`, and `is_blocked`.
 - `McpSetup.add_sdk_server(name, server, read_only=[...], side_effecting=[...], destructive=[...])` merges the in-process `spark` server (P2.3/P2.4). It takes exact tool names only.
-- `mcp_servers.json` starts the GitHub binary with `--read-only --toolsets context,repos,issues,pull_requests`, so the server itself exposes no write tools in Phase 2. `mcp_servers.example.json` is the annotated copy.
+- `mcp_servers.json` starts the GitHub binary with `--toolsets context,repos,issues,pull_requests`. Phase 2 also passed `--read-only`; 0.1.0 dropped it so `issue_write` and `add_issue_comment` work after a spoken yes (`side_effecting`), while every tool on no list stays denied. Add `--read-only` back to strip all write tools at the server. `mcp_servers.example.json` is the annotated copy.
 
 ## Wired in P2.4
 - `ClaudeAgentBrain` loads `load_mcp_servers(settings)`, or takes an injected `mcp=`. When the app passes `timers=`, it adds the in-process `spark` server.
