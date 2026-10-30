@@ -269,6 +269,8 @@ def classify_yes_no(
 
 _MAX_VALUE_CHARS = 40
 _MAX_VALUE_WORDS = 6
+_MAX_TITLE_CHARS = 80  # a title is what the user must hear to say yes
+_MAX_TITLE_WORDS = 12
 _SECRET_KEY = re.compile(
     r"token|secret|passw|api_?key|apikey|auth|credential|cookie|session|private|otp|\bpin\b|key$",
     re.I,
@@ -301,7 +303,9 @@ def humanize_tool_name(tool_name: str) -> str:
     return " ".join(out) or "that tool"
 
 
-def speakable_value(value: Any) -> str | None:
+def speakable_value(
+    value: Any, *, max_chars: int = _MAX_VALUE_CHARS, max_words: int = _MAX_VALUE_WORDS
+) -> str | None:
     """A short argument value that is safe to say out loud, or None.
 
     Anything long, URL-, path-, email- or ID-like is rejected, as is anything that
@@ -309,7 +313,7 @@ def speakable_value(value: Any) -> str | None:
     if isinstance(value, bool) or not isinstance(value, str):
         return None
     text = " ".join(value.split())
-    if not text or len(text) > _MAX_VALUE_CHARS or len(text.split()) > _MAX_VALUE_WORDS:
+    if not text or len(text) > max_chars or len(text.split()) > max_words:
         return None
     if _UNSPEAKABLE.search(text):
         return None
@@ -361,6 +365,12 @@ def _arg(args: Mapping[str, Any], *keys: str) -> str | None:
     return None
 
 
+def _title(args: Mapping[str, Any]) -> str | None:
+    return speakable_value(
+        args.get("title"), max_chars=_MAX_TITLE_CHARS, max_words=_MAX_TITLE_WORDS
+    )
+
+
 def _when(value: Any) -> str | None:
     """``2026-09-24T15:30:00`` -> ``"on Thursday at 3:30 PM"``; None if unparseable."""
     if not isinstance(value, str):
@@ -380,13 +390,35 @@ def _repo(args: Mapping[str, Any]) -> str | None:
 
 
 def _pull_request(args: Mapping[str, Any]) -> str | None:
-    title = _arg(args, "title")
+    title = _title(args)
     return f"I'll open a pull request titled {title}." if title else "I'll open a pull request."
 
 
+def _in_repo(args: Mapping[str, Any]) -> str:
+    repo = _arg(args, "repo")
+    return f" in {repo}" if repo else ""
+
+
 def _issue(args: Mapping[str, Any]) -> str | None:
-    title = _arg(args, "title")
-    return f"I'll create an issue titled {title}." if title else "I'll create an issue."
+    title = _title(args)
+    line = f"I'll create an issue{_in_repo(args)}"
+    return f"{line} titled {title}." if title else f"{line}."
+
+
+def _issue_write(args: Mapping[str, Any]) -> str | None:
+    """GitHub's ``issue_write``: one tool for creating (method create) and updating issues."""
+    method = str(args.get("method") or "create").lower()
+    if method == "create":
+        return _issue(args)
+    number = args.get("issue_number")
+    which = (
+        f"issue {number}"
+        if isinstance(number, int) and not isinstance(number, bool)
+        else "an issue"
+    )
+    if str(args.get("state") or "").lower() == "closed":
+        return f"I'll close {which}{_in_repo(args)}."
+    return f"I'll update {which}{_in_repo(args)}."
 
 
 def _comment(args: Mapping[str, Any]) -> str | None:
@@ -416,6 +448,7 @@ BUILTIN_SUMMARIZERS: dict[str, Summarizer] = {
     "create_repository": _repo,
     "create_pull_request": _pull_request,
     "create_issue": _issue,
+    "issue_write": _issue_write,
     "add_issue_comment": _comment,
     "create_branch": _branch,
     "GMAIL_CREATE_EMAIL_DRAFT": _email_draft,

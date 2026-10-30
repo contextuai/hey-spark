@@ -636,3 +636,16 @@ def test_self_test_reports_a_missing_module(monkeypatch, capsys) -> None:
     assert window.self_test() == 1
     out = capsys.readouterr().out
     assert "FAIL import no_such_module_xyz" in out and "self-test failed" in out
+
+
+@pytest.mark.parametrize("page", sorted((Path(paths.__file__).parent / "ui").glob("*.html")))
+def test_switches_are_not_turned_into_block_labels(page):
+    # A `.field > label { display: block }` rule beats `.switch { display: inline-flex }`, the
+    # track collapses and its knob covers the label text (the bug fixed in voice.html in #2).
+    import re
+
+    css = page.read_text(encoding="utf-8")
+    if 'class="switch"' not in css and 'class: "switch"' not in css:
+        return
+    for selector in re.findall(r"([^{}\n]*>\s*label)\s*\{[^}]*display:\s*block", css):
+        assert ":not(.switch)" in selector, f"{page.name}: {selector.strip()}"

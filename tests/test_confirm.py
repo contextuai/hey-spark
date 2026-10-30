@@ -194,6 +194,28 @@ def test_builtin_summary_for_github_repo():
     assert line == "I'll create a GitHub repo called weather-bot. Should I go ahead?"
 
 
+def test_github_issue_write_is_said_in_plain_words():
+    # GitHub's server has one issue_write tool; the generic line read out "issue write ... method
+    # create". The title is what the user says yes to, so a full sentence of one is kept.
+    args = {"method": "create", "owner": "me", "repo": "demo-repo", "body": "Steps: ..."}
+    title = "The login button does not work on mobile"
+    line = summarize_tool_call("mcp__github__issue_write", {**args, "title": title})
+    assert line == (
+        "I'll create an issue in demo-repo titled The login button does not work on mobile."
+        " Should I go ahead?"
+    )
+    no_url = summarize_tool_call("mcp__github__issue_write", {**args, "title": "see https://x.y/z"})
+    assert no_url == "I'll create an issue in demo-repo. Should I go ahead?"
+    update = {"method": "update", "repo": "demo-repo", "issue_number": 4}
+    assert summarize_tool_call("mcp__github__issue_write", update).startswith(
+        "I'll update issue 4 in demo-repo."
+    )
+    closing = {**update, "state": "closed"}
+    assert summarize_tool_call("mcp__github__issue_write", closing).startswith(
+        "I'll close issue 4 in demo-repo."
+    )
+
+
 def test_calendar_summary_speaks_the_time_not_the_iso_string():
     line = summarize_tool_call(
         "mcp__composio__GOOGLECALENDAR_CREATE_EVENT",
