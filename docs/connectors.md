@@ -138,6 +138,13 @@ on the repos you care about. Phase 3 adds Administration and Issues *write* only
 
 ## 3. Proposed files
 
+> **Shipped today (0.1.0):** `mcp_servers.json` and `config.yaml` carry one sample, `github`,
+> pointing at GitHub's hosted server (`https://api.githubcopilot.com/mcp/`, token in
+> `SPARK_GITHUB_PAT`), switched off. Fill in the token in the Connectors window (*Edit config*)
+> or in `.env`. The local exe and the Composio servers below are kept as `_..._example` entries
+> in `mcp_servers.example.json`: rename one and add a `connectors.servers` entry to use it. The
+> rest of this section is the original P2.1 proposal.
+
 ### 3.1 `mcp_servers.json` (placeholders only)
 
 ```json
@@ -334,7 +341,8 @@ config is **UNVERIFIED**, so a Spark-specific name avoids the question.
 2. **GitHub MCP binary** → `SPARK_GITHUB_MCP_BIN`
    1. Download `github-mcp-server_Windows_x86_64.zip` from https://github.com/github/github-mcp-server/releases (v1.12.2 or later) and verify it against the release checksums file.
    2. Unzip it to e.g. `C:/Users/<you>/.local/bin/github-mcp-server.exe`, and set `SPARK_GITHUB_MCP_BIN` to that absolute path.
-   3. App-control policies on managed machines may block unsigned exes. The fallback is `github_remote` (§2.1).
+   3. App-control policies on managed machines may block unsigned exes. Use the hosted server (the shipped `github` sample) instead.
+   4. To run the exe, replace the `github` entry in `mcp_servers.json` with `_github_local_example` from `mcp_servers.example.json`.
 3. **Composio** → `COMPOSIO_API_KEY`, `COMPOSIO_MCP_URL`, (later) `COMPOSIO_MCP_URL_OUTLOOK`
    1. Sign up at https://dashboard.composio.dev and copy the project API key into `COMPOSIO_API_KEY`.
    2. Auth configs: add **Gmail** and **Google Calendar** with *Composio-managed OAuth*.
@@ -343,7 +351,7 @@ config is **UNVERIFIED**, so a Spark-specific name avoids the question.
    5. Copy its URL `https://backend.composio.dev/v3/mcp/<id>?user_id=spark-<yourname>` into `COMPOSIO_MCP_URL`.
    6. Keep "require MCP API key" **on**.
 4. **Outlook (work)**: for a work/school tenant, get admin consent first. Raise a request naming the app (Composio's Entra app, or our own registration) and delegated Graph scopes `Mail.Read` and `Calendars.Read` only.
-5. In `config.yaml`, set `enabled: true` under `connectors.servers.github` and/or `connectors.servers.composio` (they ship off). Verify with `uv run python -m spark doctor` (P2.5). Then run the text-mode phrases in `docs/dev/history/phase2_acceptance.md` (P2.6).
+5. In `config.yaml`, set `enabled: true` under `connectors.servers.github` (it ships off), and add a `connectors.servers.composio` entry with the lists in §3.2 for Composio. Verify with `uv run python -m spark doctor` (P2.5). Then run the text-mode phrases in `docs/dev/history/phase2_acceptance.md` (P2.6).
 
 ---
 

@@ -8,34 +8,50 @@
     "On Windows an npx (or other .cmd shim) command is run as 'cmd /c npx ...' automatically."
   ],
   "github": {
-    "_comment": "Local github-mcp-server exe (github/github-mcp-server releases). Write tools are offered, but config.yaml lets them run only after a spoken yes (side_effecting) or never (destructive); any other tool is denied. Add --read-only to the args to strip them at the server.",
+    "_comment": "GitHub's hosted MCP server (github/github-mcp-server). Needs only a fine-grained token in SPARK_GITHUB_PAT (README: GitHub in two minutes). Write tools are offered, but config.yaml lets them run only after a spoken yes (side_effecting) or never (destructive); any other tool is denied. GitHub lists Copilot access as a prerequisite (docs/connectors.md §6).",
+    "type": "http",
+    "url": "https://api.githubcopilot.com/mcp/",
+    "headers": {
+      "Authorization": "Bearer ${SPARK_GITHUB_PAT}"
+    }
+  },
+  "_github_local_example": {
+    "_comment": "Shape of the same server run locally (the github-mcp-server exe from github/github-mcp-server releases) when the hosted one can't be used. Rename the key to github (no leading '_') to use it instead. Add --read-only to the args to strip write tools at the server.",
     "type": "stdio",
     "command": "${SPARK_GITHUB_MCP_BIN}",
-    "args": ["stdio", "--toolsets", "context,repos,issues,pull_requests"],
-    "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${SPARK_GITHUB_PAT}" }
+    "args": [
+      "stdio",
+      "--toolsets",
+      "context,repos,issues,pull_requests"
+    ],
+    "env": {
+      "GITHUB_PERSONAL_ACCESS_TOKEN": "${SPARK_GITHUB_PAT}"
+    }
   },
-  "github_remote": {
-    "_comment": "Fallback when the exe is blocked: GitHub's hosted server, read-only path. May need a Copilot licence (docs/connectors.md §6).",
-    "type": "http",
-    "url": "https://api.githubcopilot.com/mcp/readonly",
-    "headers": { "Authorization": "Bearer ${SPARK_GITHUB_PAT}" }
-  },
-  "composio": {
-    "_comment": "Composio dedicated MCP server (Gmail + Google Calendar). URL looks like https://backend.composio.dev/v3/mcp/<server-id>?user_id=<user>. Do not use session / Tool Router URLs: their meta tools defeat the allowlist.",
+  "_composio_example": {
+    "_comment": "Composio dedicated MCP server (Gmail + Google Calendar). URL looks like https://backend.composio.dev/v3/mcp/<server-id>?user_id=<user>. Do not use session / Tool Router URLs: their meta tools defeat the allowlist. Rename the key (no leading '_') and add a connectors.servers entry in config.yaml to use it.",
     "type": "http",
     "url": "${COMPOSIO_MCP_URL}",
-    "headers": { "x-api-key": "${COMPOSIO_API_KEY}" }
+    "headers": {
+      "x-api-key": "${COMPOSIO_API_KEY}"
+    }
   },
-  "composio_outlook": {
-    "_comment": "Separate Composio server for Outlook so it can be switched off on its own. Disabled by default in config.yaml (spec §12).",
+  "_composio_outlook_example": {
+    "_comment": "Separate Composio server for Outlook so it can be switched off on its own. Disabled by default in config.yaml (spec §12). Rename the key (no leading '_') and add a connectors.servers entry in config.yaml to use it.",
     "type": "http",
     "url": "${COMPOSIO_MCP_URL_OUTLOOK}",
-    "headers": { "x-api-key": "${COMPOSIO_API_KEY}" }
+    "headers": {
+      "x-api-key": "${COMPOSIO_API_KEY}"
+    }
   },
   "_filesystem_npx_example": {
     "_comment": "Shape of an npx-based stdio server. Rename the key (no leading '_') and add a connectors.servers entry to use it.",
     "type": "stdio",
     "command": "npx",
-    "args": ["-y", "@modelcontextprotocol/server-filesystem", "${SPARK_FILES_ROOT}"]
+    "args": [
+      "-y",
+      "@modelcontextprotocol/server-filesystem",
+      "${SPARK_FILES_ROOT}"
+    ]
   }
 }

@@ -1,23 +1,7 @@
 {
   "github": {
-    "type": "stdio",
-    "command": "${SPARK_GITHUB_MCP_BIN}",
-    "args": ["stdio", "--toolsets", "context,repos,issues,pull_requests"],
-    "env": { "GITHUB_PERSONAL_ACCESS_TOKEN": "${SPARK_GITHUB_PAT}" }
-  },
-  "github_remote": {
     "type": "http",
-    "url": "https://api.githubcopilot.com/mcp/readonly",
+    "url": "https://api.githubcopilot.com/mcp/",
     "headers": { "Authorization": "Bearer ${SPARK_GITHUB_PAT}" }
-  },
-  "composio": {
-    "type": "http",
-    "url": "${COMPOSIO_MCP_URL}",
-    "headers": { "x-api-key": "${COMPOSIO_API_KEY}" }
-  },
-  "composio_outlook": {
-    "type": "http",
-    "url": "${COMPOSIO_MCP_URL_OUTLOOK}",
-    "headers": { "x-api-key": "${COMPOSIO_API_KEY}" }
   }
 }

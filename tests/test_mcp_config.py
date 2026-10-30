@@ -385,41 +385,25 @@ def test_repo_config_and_json_load(monkeypatch):
             monkeypatch.delenv(key)
     s = load_settings(ROOT / "config.yaml", load_env_file=False)
     s.connectors.ui_file = "no-such-connectors.json"  # the user's own Connectors-window servers
-    assert s.connectors.servers["composio_outlook"].enabled is False
+    assert set(s.connectors.servers) == {"github", "claude_ai_Gmail", "claude_ai_Google_Calendar"}
     assert s.connectors.servers["github"].allow_destructive is False
-    # Connectors that need the user's own credentials ship off (safe public default).
+    # The one sample that needs the user's own credentials ships off (safe public default).
     assert s.connectors.servers["github"].enabled is False
-    assert s.connectors.servers["composio"].enabled is False
+    assert set(read_mcp_json(ROOT / "mcp_servers.json")) == {"github"}
     assert load_mcp_servers(s, environ={}).servers == {}
-    # A user who sets the variables turns them on in config.yaml:
+    # A user who sets the token turns it on in config.yaml:
     s.connectors.servers["github"].enabled = True
-    s.connectors.servers["composio"].enabled = True
-    exe = ROOT / "pyproject.toml"  # any existing file stands in for the exe
-    env = {
-        "SPARK_GITHUB_MCP_BIN": str(exe),
-        "SPARK_GITHUB_PAT": SECRET_PAT,
-        "COMPOSIO_API_KEY": SECRET_KEY,
-        "COMPOSIO_MCP_URL": "https://backend.composio.dev/v3/mcp/abc?user_id=u",
-    }
-    setup = load_mcp_servers(s, environ=env)
-    assert set(setup.servers) == {"github", "composio"}
-    assert "--read-only" not in setup.servers["github"]["args"]  # issue_write asks first
-    assert set(setup.disabled) == {
-        "github_remote",
-        "composio_outlook",
-        "claude_ai_Gmail",
-        "claude_ai_Google_Calendar",
-    }
+    setup = load_mcp_servers(s, environ={"SPARK_GITHUB_PAT": SECRET_PAT})
+    assert set(setup.servers) == {"github"}
+    assert setup.servers["github"]["url"] == "https://api.githubcopilot.com/mcp/"  # not /readonly
+    assert set(setup.disabled) == {"claude_ai_Gmail", "claude_ai_Google_Calendar"}
     assert "mcp__github__list_pull_requests" in setup.allowed_tools
-    assert "mcp__composio__GMAIL_FETCH_EMAILS" in setup.allowed_tools
-    assert "mcp__composio__GMAIL_DELETE_*" in setup.disallowed_tools
     assert "mcp__github__merge_pull_request" in setup.disallowed_tools
     assert setup.policy.classify("mcp__github__create_repository") == "side_effect"
+    assert setup.policy.classify("mcp__github__issue_write") == "side_effect"
     assert not any(t.endswith("__*") or "__" not in t[5:] for t in setup.allowed_tools)
-    dumped = json.dumps(setup.servers)
-    assert SECRET_PAT not in dumped and SECRET_KEY not in dumped
+    assert SECRET_PAT not in json.dumps(setup.servers)
 
     empty = load_mcp_servers(s, environ={})
     assert empty.servers == {}
-    assert "SPARK_GITHUB_MCP_BIN" in empty.disabled["github"]
-    assert "COMPOSIO_API_KEY" in empty.disabled["composio"]
+    assert "SPARK_GITHUB_PAT" in empty.disabled["github"]

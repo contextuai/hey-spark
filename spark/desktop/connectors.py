@@ -9,7 +9,9 @@ Two kinds of servers are listed:
 
 * ``app``: added here and kept in ``connectors.json``; everything is editable.
 * ``config``: set up by hand in ``config.yaml`` + ``mcp_servers.json``. They're shown (with why
-  they're off, if they are) and can be tested, but are edited in those files.
+  they're off, if they are) and can be tested. One switched on in ``config.yaml`` is edited in
+  those files; a switched-off one (such as the shipped ``github`` sample) can be edited or
+  switched on here, which copies it into ``connectors.json`` as an app server of the same name.
 * ``claudeai``: the user's claude.ai account connectors (:mod:`spark.brain.claudeai`): every one
   the CLI reported last, plus the ``claude_ai_*`` servers in ``config.yaml``. The on/off switch,
   route and per-tool modes are editable; the choices go to ``connectors.json`` and override the
@@ -153,8 +155,35 @@ class ConnectorsApi:
             "tested_at": test.get("tested_at"),
             "route": cfg.route if cfg is not None else "auto",
             "tools": [{**t, "mode": modes.get(t["name"], "off")} for t in tools],
+            "adoptable": self._adoptable(name),
             **self._extras(name),
         }
+
+    def _adoptable(self, name: str) -> bool:
+        """A config-file server the window may take over: one not switched on in config.yaml."""
+        return not store.configured_on(self._settings.connectors.servers, name)
+
+    def _config_definition(self, name: str) -> dict[str, Any] | None:
+        """A switched-off config-file server's definition, without its ``_comment`` keys."""
+        if not self._adoptable(name):
+            return None
+        raw, _ = self._config_servers()
+        config = raw.get(name)
+        if not isinstance(config, dict):
+            return None
+        return {k: v for k, v in config.items() if not k.startswith("_")}
+
+    def _adopt(self, name: str) -> dict[str, Any] | None:
+        """Copy a switched-off config-file server into connectors.json, with the tools its last
+        test here found. None when ``name`` isn't one."""
+        config = self._config_definition(name)
+        if config is None:
+            return None
+        store.add_servers(self._settings, json.dumps({name: config}), reserved=self._reserved())
+        test = self._config_tests.get(name, {})
+        if test.get("tools"):
+            store.record_test(self._settings, name, test["tools"], None)
+        return store.load_store(store.store_path(self._settings)).get(name)
 
     # --- claude.ai account connectors ------------------------------------------------------
 
@@ -274,9 +303,10 @@ class ConnectorsApi:
     def get_config(self, name: str) -> dict[str, Any]:
         """The server definition as editable JSON (placeholders, never secret values)."""
         entry = store.load_store(store.store_path(self._settings)).get(name)
-        if entry is None:
+        config = entry.get("config", {}) if entry is not None else self._config_definition(name)
+        if config is None:
             return {"ok": False, "error": f"No connector named {name!r}."}
-        return {"ok": True, "text": json.dumps({name: entry.get("config", {})}, indent=2)}
+        return {"ok": True, "text": json.dumps({name: config}, indent=2)}
 
     # --- changing ------------------------------------------------------------------------
 
@@ -377,6 +407,8 @@ class ConnectorsApi:
         if claudeai.is_claudeai(name):
             return self._set_claudeai(name, enabled=bool(enabled))
         try:
+            if name not in store.load_store(store.store_path(self._settings)):
+                self._adopt(name)
             entry = store.update(self._settings, name, enabled=bool(enabled))
         except ConnectorError as exc:
             return {"ok": False, "error": str(exc)}

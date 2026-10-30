@@ -254,8 +254,10 @@
   }
 
   async function setEnabled(name, on) {
+    const adopted = S.servers.find((x) => x.name === name)?.source === "config";
     const r = await api().set_enabled(name, on);
     if (r.server) { replace(r.server); markDirty(); }
+    if (adopted) await refresh();  // it moved to "Added here"
     render();
   }
 
@@ -358,6 +360,7 @@
     const editable = s.source === "app";
     const account = s.source === "claudeai";  // claude.ai connector: switch, route and tools editable
     const canEdit = editable || account;
+    const adopt = s.source === "config" && s.adoptable;  // switched-off sample: edit or turn on here
     const c = counts(s);
     const wrap = el("div");
 
@@ -370,10 +373,10 @@
         ),
         el("div", { class: "target", text: s.target }),
       ),
-      el("label", { class: "switch", title: canEdit ? "Let Spark use this server" : "Set in config.yaml" },
+      el("label", { class: "switch", title: canEdit || adopt ? "Let Spark use this server" : "Set in config.yaml" },
         el("span", { text: s.enabled ? "On" : "Off" }),
         (() => {
-          const box = el("input", { type: "checkbox", disabled: account ? false : !editable || (!s.enabled && s.status !== "ok"),
+          const box = el("input", { type: "checkbox", disabled: account ? false : !(editable || adopt) || (!s.enabled && s.status !== "ok"),
             onchange: (e) => setEnabled(s.name, e.target.checked) });
           box.checked = s.enabled;
           return box;
@@ -400,7 +403,7 @@
     const claudeLink = () => el("button", { type: "button", onclick: () => api().open_link(s.link), text: "Open claude.ai connectors" });
     wrap.append(el("div", { class: "actions" },
       account ? claudeLink() : el("button", { type: "button", disabled: busy, onclick: () => test(s.name), text: busy ? "Testing…" : "Test connection" }),
-      editable ? el("button", { type: "button", onclick: () => openEdit(s.name), text: "Edit config" }) : null,
+      editable || adopt ? el("button", { type: "button", onclick: () => openEdit(s.name), text: "Edit config" }) : null,
       editable ? remove : null,
     ));
 
@@ -496,6 +499,7 @@
     if (account) wrap.append(el("p", { class: "note", text: s.enabled
       ? "Your choices here override the defaults in config.yaml. Connect, sign in or disconnect it on claude.ai."
       : "Turn it on (top right) for Spark to use these tools. claude.ai connectors that are off stay hidden from Spark." }));
+    else if (adopt) wrap.append(el("p", { class: "note", text: "A sample from mcp_servers.json. Click Edit config and paste your token in place of the ${...} placeholder (it's moved to .env), or set it in .env. Once it tests fine, turn it on." }));
     else if (!editable) wrap.append(el("p", { class: "note", text: "This server is set up in config.yaml and mcp_servers.json; change its tools there." }));
     else if (!s.enabled) wrap.append(el("p", { class: "note", text: "Turn the server on (top right) for Spark to use these tools." }));
     return wrap;

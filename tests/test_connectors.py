@@ -445,6 +445,52 @@ def test_window_api_lists_config_file_servers_read_only(tmp_path):
     assert "GH" in gh["error"]
     assert {t["name"]: t["mode"] for t in gh["tools"]} == {"get_me": "allow", "issue_write": "ask"}
     assert not api.add('{"github": {"url": "https://x.test"}}')["added"]
+    assert gh["adoptable"] is False
+    assert not api.get_config("github")["ok"]  # switched on: edited in the files
+
+
+_SAMPLE = {
+    "github": {
+        "_comment": "shipped sample",
+        "type": "http",
+        "url": "https://g.test/mcp",
+        "headers": {"Authorization": "Bearer ${SPARK_GITHUB_PAT}"},
+    }
+}
+
+
+def test_switched_off_sample_is_edited_in_the_window(tmp_path, monkeypatch):
+    # the shipped github sample: fill in the token in Edit config, it becomes a window server
+    monkeypatch.delenv("SPARK_GITHUB_PAT", raising=False)
+    monkeypatch.delenv("SPARK_MCP_GITHUB_AUTHORIZATION", raising=False)
+    s = _settings(tmp_path, _SAMPLE, {"github": {"enabled": False, "allowed_tools": ["get_me"]}})
+    api = ConnectorsApi(s, probe_fn=_fake_probe)
+    [gh] = api.list()["servers"]
+    assert gh["source"] == "config" and gh["adoptable"] is True
+    text = api.get_config("github")["text"]
+    assert "${SPARK_GITHUB_PAT}" in text and "_comment" not in text
+
+    r = api.update_config("github", text.replace("${SPARK_GITHUB_PAT}", TOKEN))
+    assert r["ok"], r
+    assert TOKEN in (tmp_path / ".env").read_text(encoding="utf-8")
+    [gh] = api.list()["servers"]
+    assert gh["source"] == "app" and TOKEN not in json.dumps(gh)
+    assert api.test("github")["ok"]
+    assert api.set_enabled("github", True)["server"]["enabled"] is True
+    assert load_mcp_servers(s).servers["github"]["url"] == "https://g.test/mcp"
+
+
+def test_switching_on_a_tested_sample_copies_it_with_its_tools(tmp_path, monkeypatch):
+    monkeypatch.setenv("SPARK_GITHUB_PAT", TOKEN)
+    s = _settings(tmp_path, _SAMPLE, {"github": {"enabled": False}})
+    api = ConnectorsApi(s, probe_fn=_fake_probe)
+    assert api.test("github")["ok"]
+    on = api.set_enabled("github", True)
+    assert on["ok"] and on["server"]["source"] == "app" and on["server"]["enabled"] is True
+    assert [t["name"] for t in on["server"]["tools"]] == ["yd_search"]
+    entry = cs.load_store(tmp_path / "connectors.json")["github"]
+    assert entry["config"]["headers"] == {"Authorization": "Bearer ${SPARK_GITHUB_PAT}"}
+    assert "_comment" not in entry["config"]
 
 
 # --- P5.7j: route, live status, notes in the window ---------------------------------------------
