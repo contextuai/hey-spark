@@ -75,8 +75,10 @@ The first public release: desktop apps for macOS (Apple Silicon) and Windows, an
     shipped `github` example);
   - deletes a removed server's token from `.env` when nothing else uses it.
 
-  The bundled local `github` server no longer starts with `--read-only`, so its issue tools work
-  after a spoken yes, as `config.yaml` lists them.
+  The shipped `mcp_servers.json` has one sample, `github`, on GitHub's hosted server and switched
+  off. Open it in the Connectors window, click *Edit config* and paste a token (or set
+  `SPARK_GITHUB_PAT` in `.env`). Its issue tools work after a spoken yes. The local exe and the
+  Composio servers moved to `mcp_servers.example.json` as examples.
 - **Local tools:** timers, the time, and a "start a new project" flow (folder, git repo, private
   GitHub repo and tracking issue) behind the confirmation gate.
 - **Awareness and conversations:** an awake window after each reply, local voice commands

@@ -200,17 +200,16 @@ server's tool policy lives in `config.yaml` under `connectors:`:
 
 1. Create a [fine-grained token](https://github.com/settings/personal-access-tokens/new) for the
    repos Spark may see: *Issues: Read and write*, *Pull requests: Read* and *Contents: Read*.
-2. In the **Connectors** window choose **Add connectors**, paste this with your token in place of
-   `YOUR_TOKEN`, and press **Add and test**. Spark moves the token to `.env`.
+2. In the **Connectors** window, open **github** (under *From config files*) and click **Edit
+   config**. Replace `${SPARK_GITHUB_PAT}` with your token and press **Save and test**. Spark
+   moves the token to `.env`.
 
    ```json
    {
-     "mcpServers": {
-       "github": {
-         "type": "http",
-         "url": "https://api.githubcopilot.com/mcp/",
-         "headers": { "Authorization": "Bearer YOUR_TOKEN" }
-       }
+     "github": {
+       "type": "http",
+       "url": "https://api.githubcopilot.com/mcp/",
+       "headers": { "Authorization": "Bearer YOUR_TOKEN" }
      }
    }
    ```
@@ -227,10 +226,11 @@ computer, see
 
 ### Other connectors
 
-The bundled GitHub and Composio servers ship disabled. Add their credentials to `.env`, then set
-`enabled: true` for them in `config.yaml`. [docs/connectors.md](docs/connectors.md) covers
-GitHub, Gmail and Google Calendar (through Composio), and Outlook, with step-by-step credential
-setup. The claude.ai Gmail and Calendar connectors are also off by default: they work only through
+Choose **Add connectors** in the Connectors window and paste any MCP server's JSON (the
+`mcpServers` block from its README or from Claude Desktop), or import Claude Desktop's servers in
+one click. [docs/connectors.md](docs/connectors.md) covers servers set up by hand in
+`mcp_servers.json` and `config.yaml`, including Gmail, Google Calendar and Outlook through
+Composio. The claude.ai Gmail and Calendar connectors are off by default: they work only through
 a claude.ai login in your own Claude CLI, so they're for personal setups.
 
 ## Privacy

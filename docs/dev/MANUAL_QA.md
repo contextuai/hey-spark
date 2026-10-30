@@ -23,7 +23,7 @@ Tick an item only when its **Pass** condition holds.
 - [ ] **Live tests.** Run `uv run pytest -q -m live`. Pass: all selected tests pass (capital of Japan, two-turn context, tool results without IDs or URLs, `${VAR}` expansion, confirm yes/no, deep routing), plus Deepgram and ElevenLabs if their keys and extras (`uv sync --extra deepgram --extra elevenlabs`) are set.
 
 ## Connectors
-- [ ] **Connector credentials.** Follow `docs/connectors.md` §5 to set `SPARK_GITHUB_PAT`, `SPARK_GITHUB_MCP_BIN`, `COMPOSIO_API_KEY`, and `COMPOSIO_MCP_URL` in `.env` and set `enabled: true` for `github` and `composio` in `config.yaml`, then run `uv run python -m spark doctor`. Pass: `✔ connector: github` and `✔ connector: composio`, each listing its tools.
+- [ ] **Connector credentials.** In the Connectors window, open the `github` sample, click *Edit config*, put a fine-grained token in place of `${SPARK_GITHUB_PAT}` and press *Save and test*. Pass: the token lands in `.env` (not in `connectors.json`), the test lists GitHub's tools, and after switching it on, `uv run python -m spark doctor` shows `✔ connector: github`.
 - [ ] **Calendar, email, and PR answers.** Follow the text-mode phrases in `docs/dev/history/phase2_acceptance.md` §1–3. Pass: the answers are correct, summarized in 1–3 sentences, and contain no IDs or URLs, in both text mode and voice.
 
 ## Actions, routing, barge-in

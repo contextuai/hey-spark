@@ -325,57 +325,7 @@ def _default_connector_servers() -> dict[str, ConnectorServerConfig]:
                 "update_pull_request_branch",
             ],
         ),
-        "github_remote": ConnectorServerConfig(
-            enabled=False,
-            allowed_tools=[
-                "get_me",
-                "list_pull_requests",
-                "pull_request_read",
-                "search_pull_requests",
-                "list_issues",
-                "issue_read",
-                "search_issues",
-            ],
-        ),
-        "composio": ConnectorServerConfig(
-            enabled=False,
-            allowed_tools=[
-                "GMAIL_FETCH_EMAILS",
-                "GMAIL_FETCH_MESSAGE_BY_THREAD_ID",
-                "GMAIL_LIST_THREADS",
-                "GMAIL_GET_PROFILE",
-                "GOOGLECALENDAR_EVENTS_LIST",
-                "GOOGLECALENDAR_EVENTS_LIST_ALL_CALENDARS",
-                "GOOGLECALENDAR_FIND_EVENT",
-                "GOOGLECALENDAR_FIND_FREE_SLOTS",
-            ],
-            side_effecting=["GMAIL_CREATE_EMAIL_DRAFT", "GOOGLECALENDAR_CREATE_EVENT"],
-            destructive=[
-                "GMAIL_SEND_EMAIL",
-                "GMAIL_SEND_DRAFT",
-                "GMAIL_REPLY_TO_THREAD",
-                "GMAIL_DELETE_*",
-                "GMAIL_MOVE_TO_TRASH",
-                "GOOGLECALENDAR_DELETE_EVENT",
-                "GOOGLECALENDAR_CLEAR_CALENDAR",
-            ],
-        ),
         **_default_claudeai_servers(),
-        "composio_outlook": ConnectorServerConfig(
-            enabled=False,
-            allowed_tools=[
-                "OUTLOOK_LIST_MESSAGES",
-                "OUTLOOK_GET_MESSAGE",
-                "OUTLOOK_LIST_EVENTS",
-                "OUTLOOK_LIST_CALENDARS",
-            ],
-            destructive=[
-                "OUTLOOK_SEND_EMAIL",
-                "OUTLOOK_SEND_DRAFT",
-                "OUTLOOK_DELETE_MESSAGE",
-                "OUTLOOK_MOVE_MESSAGE",
-            ],
-        ),
     }
 
 

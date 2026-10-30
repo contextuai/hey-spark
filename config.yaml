@@ -142,8 +142,8 @@ connectors:
   block_claudeai_connectors: false
   claudeai_state_file: claudeai_connectors.json # last seen claude.ai connectors (app-managed)
   servers:
-    github:                       # local github-mcp-server exe; needs SPARK_GITHUB_MCP_BIN and SPARK_GITHUB_PAT
-      enabled: false              # turn on after setting the variables in .env (docs/connectors.md §5)
+    github:                       # GitHub's hosted MCP server; needs a token in SPARK_GITHUB_PAT
+      enabled: false              # or leave it off and fill in the token in the Connectors window
       allowed_tools:              # read-only, pre-approved (globs expand only against known tool names;
         - get_me                  # a server-wide wildcard is never accepted here)
         - list_pull_requests
@@ -170,35 +170,6 @@ connectors:
         - fork_repository
         - actions_run_trigger
         - update_pull_request_branch
-      allow_destructive: false
-    github_remote:                # fallback: api.githubcopilot.com (may need a Copilot licence)
-      enabled: false
-      allowed_tools: [get_me, list_pull_requests, pull_request_read, search_pull_requests, list_issues, issue_read, search_issues]
-      side_effecting: []
-      destructive: []
-      allow_destructive: false
-    composio:                     # Gmail + Google Calendar; needs COMPOSIO_API_KEY and COMPOSIO_MCP_URL
-      enabled: false              # turn on after setting the variables in .env (docs/connectors.md §5)
-      allowed_tools:
-        - GMAIL_FETCH_EMAILS
-        - GMAIL_FETCH_MESSAGE_BY_THREAD_ID
-        - GMAIL_LIST_THREADS
-        - GMAIL_GET_PROFILE
-        - GOOGLECALENDAR_EVENTS_LIST
-        - GOOGLECALENDAR_EVENTS_LIST_ALL_CALENDARS
-        - GOOGLECALENDAR_FIND_EVENT
-        - GOOGLECALENDAR_FIND_FREE_SLOTS
-      side_effecting:
-        - GMAIL_CREATE_EMAIL_DRAFT
-        - GOOGLECALENDAR_CREATE_EVENT
-      destructive:
-        - GMAIL_SEND_EMAIL
-        - GMAIL_SEND_DRAFT
-        - GMAIL_REPLY_TO_THREAD
-        - GMAIL_DELETE_*          # glob: sent as a wildcard deny rule
-        - GMAIL_MOVE_TO_TRASH
-        - GOOGLECALENDAR_DELETE_EVENT
-        - GOOGLECALENDAR_CLEAR_CALENDAR
       allow_destructive: false
     # claude.ai connectors use a claude.ai login in your Claude CLI, so they're off by default
     # (personal setups only; docs/connectors.md §4.7).
@@ -236,12 +207,6 @@ connectors:
       allow_destructive: false
       route: deep
       route_keywords: [calendar, meeting, meetings]
-    composio_outlook:             # work/school tenants may need admin consent (spec §12)
-      enabled: false
-      allowed_tools: [OUTLOOK_LIST_MESSAGES, OUTLOOK_GET_MESSAGE, OUTLOOK_LIST_EVENTS, OUTLOOK_LIST_CALENDARS]
-      side_effecting: []
-      destructive: [OUTLOOK_SEND_EMAIL, OUTLOOK_SEND_DRAFT, OUTLOOK_DELETE_MESSAGE, OUTLOOK_MOVE_MESSAGE]
-      allow_destructive: false
 
 # "Hey Spark, let's start a new project called weather-bot" (start_project tool, Phase 3).
 # Always confirmed by voice first. Creates <root_dir>/<name> with git and a first commit, then
