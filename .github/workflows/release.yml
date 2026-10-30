@@ -195,6 +195,10 @@ jobs:
         needs.tag.result == 'success' || needs.tag.result == 'skipped'
       )
     uses: ./.github/workflows/build-apps.yml
+    # build-apps' jobs ask for contents: write (to attach test builds to a draft release), and a
+    # called workflow can't get more than its caller grants.
+    permissions:
+      contents: write
     with:
       ref: ${{ needs.compute.outputs.release_tag }}
       sign: true

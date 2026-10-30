@@ -6,7 +6,10 @@ name: Build apps
 #   - Pull requests that touch packaging or the desktop app run it too, so a packaging change is
 #     proven on a real runner and the PR carries a DMG and an installer to try (Actions >
 #     this run > Artifacts). PR builds are never signed.
-#   - Run it by hand (workflow_dispatch) for a test build of any branch.
+#   - Run it by hand (workflow_dispatch) for a test build of any branch. Give it a
+#     draft_release name to attach the DMG and the installer to a draft GitHub release of that
+#     name (only people with write access see drafts) instead of uploading build artifacts;
+#     release files don't count against the Actions storage quota.
 #
 # macOS signing is optional. With these repository secrets the app is signed with a Developer ID
 # and the DMG notarized; without them it is ad hoc signed and Gatekeeper asks users to allow it:
@@ -27,11 +30,20 @@ on:
         description: "Sign and notarize the macOS app when the secrets exist"
         type: boolean
         default: false
+      draft_release:
+        description: "Attach the builds to a draft release with this tag name instead of artifacts"
+        type: string
+        default: ""
     outputs:
       macos_notarized:
         description: "'true' when the DMG was signed with a Developer ID and notarized"
         value: ${{ jobs.macos.outputs.notarized }}
   workflow_dispatch:
+    inputs:
+      draft_release:
+        description: "Attach the builds to a draft release with this tag name (e.g. test-build); empty uploads artifacts"
+        type: string
+        default: ""
   pull_request:
     paths:
       - "packaging/**"
@@ -47,9 +59,40 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Creates the draft release the builds attach to, when one is asked for.
+  draft:
+    name: Draft release
+    if: inputs.draft_release != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    outputs:
+      id: ${{ steps.draft.outputs.id }}
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ inputs.draft_release }}
+    steps:
+      - name: Find or create the draft
+        id: draft
+        run: |
+          set -euo pipefail
+          id=$(gh api "repos/$GH_REPO/releases?per_page=100" \
+            --jq "[.[] | select(.draft and .tag_name == \"$TAG\")][0].id // empty")
+          if [[ -z "$id" ]]; then
+            id=$(gh api "repos/$GH_REPO/releases" -f tag_name="$TAG" -f name="Test build: $TAG" \
+              -F draft=true -f body="Test build of ${{ inputs.ref || github.ref_name }}. Not a release." --jq .id)
+          fi
+          echo "Draft release $TAG has id $id"
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+
   macos:
     name: macOS app (Apple Silicon)
+    needs: [draft]
+    if: ${{ !cancelled() && needs.draft.result != 'failure' }}
     runs-on: macos-latest
+    permissions:
+      contents: write
     timeout-minutes: 60
     outputs:
       notarized: ${{ steps.build.outputs.notarized }}
@@ -120,6 +163,7 @@ jobs:
           ls -la
 
       - name: Upload build artifact
+        if: inputs.draft_release == ''
         uses: actions/upload-artifact@v7
         with:
           name: installer-macos
@@ -127,13 +171,36 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+      - name: Attach to the draft release
+        if: inputs.draft_release != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.draft.outputs.id }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          for f in *; do
+            # Replace a file of the same name from an earlier run.
+            old=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" \
+              --jq ".[] | select(.name == \"$f\") | .id")
+            [[ -n "$old" ]] && gh api -X DELETE "repos/$GH_REPO/releases/assets/$old"
+            gh api -X POST -H "Content-Type: application/octet-stream" --input "$f" \
+              "https://uploads.github.com/repos/$GH_REPO/releases/$RELEASE_ID/assets?name=$f" --jq .name
+          done
+
       - name: Remove signing keychain
         if: always() && steps.cert.outputs.signed == 'true'
         run: security delete-keychain "$RUNNER_TEMP/signing.keychain-db" || true
 
   windows:
     name: Windows installer
+    needs: [draft]
+    if: ${{ !cancelled() && needs.draft.result != 'failure' }}
     runs-on: windows-latest
+    permissions:
+      contents: write
     timeout-minutes: 60
     env:
       PYTHONUTF8: "1"
@@ -195,9 +262,29 @@ jobs:
           ls -la release-assets/
 
       - name: Upload build artifact
+        if: inputs.draft_release == ''
         uses: actions/upload-artifact@v7
         with:
           name: installer-windows
           path: release-assets/*
           if-no-files-found: error
           retention-days: 14
+
+      - name: Attach to the draft release
+        if: inputs.draft_release != ''
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_ID: ${{ needs.draft.outputs.id }}
+        run: |
+          set -euo pipefail
+          cd release-assets
+          for f in *; do
+            # Replace a file of the same name from an earlier run.
+            old=$(gh api "repos/$GH_REPO/releases/$RELEASE_ID/assets?per_page=100" \
+              --jq ".[] | select(.name == \"$f\") | .id")
+            [[ -n "$old" ]] && gh api -X DELETE "repos/$GH_REPO/releases/assets/$old"
+            gh api -X POST -H "Content-Type: application/octet-stream" --input "$f" \
+              "https://uploads.github.com/repos/$GH_REPO/releases/$RELEASE_ID/assets?name=$f" --jq .name
+          done
