@@ -17,7 +17,7 @@ or any OpenAI-compatible model, including a local one through Ollama. Spark reac
 [MCP](https://modelcontextprotocol.io) servers, and it asks out loud before doing anything that
 changes something.
 
-<!-- TODO: demo GIF of the desktop window (docs/media/demo.gif) -->
+<p align="center"><img src="docs/media/demo.gif" alt="Saying &quot;Hey Spark, rise and shine&quot;: the Spark window listens, thinks and reads out a morning briefing, with captions" width="800"></p>
 
 > *"Hey Spark, what's on my calendar tomorrow?"*
 > *"Set a pasta timer for ten minutes."*
