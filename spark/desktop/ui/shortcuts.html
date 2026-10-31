@@ -78,7 +78,7 @@
   .muted { color: var(--muted); }
   .help { color: var(--muted); font-size: 12.5px; margin: 4px 0 14px; max-width: 720px; }
   .field { margin: 0 0 14px; max-width: 760px; }
-  .field > label { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 5px; }
+  .field > label:not(.switch) { display: block; font-weight: 600; font-size: 12.5px; margin-bottom: 5px; }
   .field .sub { color: var(--muted); font-size: 12px; margin: -2px 0 6px; }
   input[type=text], textarea {
     width: 100%; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text);
